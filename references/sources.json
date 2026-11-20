@@ -1,0 +1,14 @@
+{
+  "checked_on": "2026-11-20",
+  "amazon_plugin_homepage": "https://developer.amazonservices.com/amazon-selling-partner-plugin",
+  "amazon_official_skills": {
+    "repository": "https://github.com/amzn/selling-partner-agentic-toolkit",
+    "commit": "4563bfcb17ff4d921361530053118a8ca9eeaa67",
+    "candidates": ["seller-analytics", "listing-searchability", "stockout-prevention"],
+    "codex_connector_access_verified": false
+  },
+  "amazon_sdk": "https://github.com/amzn/selling-partner-api-sdk",
+  "amazon_sales_traffic_schema": "https://github.com/amzn/selling-partner-api-models/blob/main/schemas/reports/sellerSalesAndTrafficReport.json",
+  "amazon_listings_model": "https://github.com/amzn/selling-partner-api-models/blob/main/models/listings-items-api-model/listingsItems_2021-08-01.json",
+  "amazon_product_type_model": "https://github.com/amzn/selling-partner-api-models/blob/main/models/product-type-definitions-api-model/definitionsProductTypes_2020-09-01.json"
+}
