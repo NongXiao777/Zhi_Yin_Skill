@@ -1,0 +1,4 @@
+产品编号,父SKU,SKU,变体,标题,币种,原售价,毛重(克),包装尺寸(cm)
+DEMO-1001,DEMO-BOX,DEMO-BOX-W,白色,演示收纳盒,人民币,20.00,360,18x12x9
+DEMO-1001,DEMO-BOX,DEMO-BOX-G,灰色,演示收纳盒,人民币,21.50,365,18x12x9
+DEMO-2002,DEMO-TRAY,DEMO-TRAY-B,蓝色,演示托盘,人民币,9.50,160,14x8x3

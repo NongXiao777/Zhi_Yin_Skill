@@ -6,6 +6,18 @@
     "dataEndTime": "2026-11-07",
     "marketplaceIds": ["ATVPDKIKX0DER"]
   },
+  "salesAndTrafficByDate": [
+    {
+      "date": "2026-11-01",
+      "salesByDate": {"unitsOrdered": 1, "orderedProductSales": {"amount": 20, "currencyCode": "USD"}},
+      "trafficByDate": {"sessions": 20, "pageViews": 30, "unitSessionPercentage": 5}
+    },
+    {
+      "date": "2026-11-02",
+      "salesByDate": {"unitsOrdered": 2, "orderedProductSales": {"amount": 50, "currencyCode": "USD"}},
+      "trafficByDate": {"sessions": 50, "pageViews": 70, "unitSessionPercentage": 4}
+    }
+  ],
   "salesAndTrafficByAsin": [
     {
       "parentAsin": "B0TEST0000", "childAsin": "B0TEST0001", "sku": "DEMO-001",

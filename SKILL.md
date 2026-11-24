@@ -1,18 +1,13 @@
 ---
 name: zhiying-cli
-description: Inspect 智慧跨境/智赢跨境 interfaces and summarize Amazon traffic reports with compact local commands. Use for low-token CLI investigation and Amazon natural-traffic workflows without computer use.
+description: Diagnose 智赢跨境, preview product and pricing drafts from local data, and run compact Amazon seller commands.
 ---
 
-Use `scripts/zhiying.py` with the available Python runtime. It uses only the standard library and returns compact JSON.
+Run `scripts/zhiying.py` with Python 3.9+ and use `<command> --help` for flags. Return only the fields and rows needed.
 
-Commands:
-- `status`: installed executable, running processes, app-owned listening ports, extension version.
-- `launch`: start the existing executable, or report that it is already running.
-- `routes --match amazon --limit 10`: inspect extension route definitions without HTTP requests.
-- `traffic-summary --file report.json --limit 10`: summarize a supplied Sales and Traffic JSON report.
+- Local app diagnostics and launch use `status`, `launch`, or `routes`. Read [interfaces.md](references/interfaces.md) for client details.
+- For local ERP product tables, use `erp-product-get` to select by product number and `erp-draft-preview` to review package fields and variant prices. Read [erp-products.md](references/erp-products.md) for columns and rules.
+- A downloaded Sales and Traffic JSON uses `traffic-summary --file report.json`. Filter by `--asin` or `--sku`, or use `--by date` for the report's date aggregates.
+- Online Amazon operations use `listing-get`, `listing-preview`, `fba-inventory`, `report-create`, `report-status`, or `report-summary`. Read [sp-api.md](references/sp-api.md) for credentials, roles and examples. Preview validates a draft without publishing. Create a report only when asked to request new data.
 
-Default installation: `D:\ZYing`; extension: `%LOCALAPPDATA%\ZYing\zying-ext.crx`. Override with `--app` or `--extension` before the subcommand.
-
-The executable is a WinForms/CefSharp client. Its first argument is an internal startup identifier; do not pass arbitrary CLI flags. HTTP commands exist, but authentication and signing are required. Route discovery does not establish payload schemas or read-only behavior. This helper does not execute business commands.
-
-For authenticated automation, read [references/amazon-organic.md](references/amazon-organic.md); use [references/interfaces.md](references/interfaces.md) for app details. Current focus is Amazon natural traffic. Sales/Traffic reports measure all page traffic; revenue is not net profit. Business writes and stop-loss decisions need verified permissions, costs and user rules. Return only needed fields and bounded rows.
+For traffic interpretation or connector research, read [amazon-organic.md](references/amazon-organic.md). Sales and Traffic covers all page traffic. Profit and stop-loss decisions require costs, fees and the seller's thresholds.

@@ -16,7 +16,7 @@ Static inspection of `D:\ZYing\ZYing.Work.dll`, type `AmzService.Amz`, found:
 
 The installation contains the report identifier `GET_SALES_AND_TRAFFIC_REPORT`. This is evidence that the application contains a compatible report capability, not a callable shell command. Native methods cannot simply be run as external CLI subcommands without authentication and initialization.
 
-The official report JSON model includes `salesAndTrafficByAsin`, with `salesByAsin` and `trafficByAsin`, plus date aggregates. The supplied `traffic-summary` command parses an already downloaded JSON report and returns ASIN/SKU, sessions, page views, units ordered, sales/currency, and unit-session percentage. It performs no account/network operations. SKU can be absent when reports use CHILD/PARENT aggregation.
+The report has `salesAndTrafficByAsin` and `salesAndTrafficByDate`. Use `traffic-summary` for a local JSON or `report-summary` for an authorized Amazon report. SKU is available when the report uses `SKU` aggregation. See [SP-API operations](sp-api.md) for commands.
 
 This report covers page traffic and sales; it does not explicitly separate natural traffic from paid traffic. Do not equate unit-session percentage with orders/session or claim a change will guarantee conversion. Stop-loss calculations require product cost, Amazon fees, shipping, refunds and the user's thresholds; gross sales alone cannot supply net profit.
 
@@ -26,4 +26,4 @@ The official `amzn/selling-partner-api-sdk` supplies Python/JavaScript/C# client
 
 The official `amzn/selling-partner-agentic-toolkit` contains `seller-analytics`, `listing-searchability` and `stockout-prevention` skills, backed by the Selling Partner Connector MCP. The official product homepage lists AWS Quick and Claude as current hosts. Codex compatibility and this account's authorization were not verified, and this session exposes no Amazon connector tools. The analytics skill retains a private-beta note about domain naming; do not interpret that note alone as proof the whole product is unreleased. Its analytics skill also requires a separate request reference, so its apparent entrypoint length understates loaded context.
 
-For repeated use, prefer a short router and fixed commands such as listing validation, report retrieval and traffic summaries. Only claim a business command is implemented after a real authorized request and response have been validated. For current offline work, use the supplied local JSON summary command. If connector access becomes available, discover metric IDs once and reuse the verified IDs.
+For repeated use, prefer fixed commands and limit output to the rows and fields relevant to the question. The current SP-API commands were exercised with simulated responses. Seller-account verification still requires an authorized application.

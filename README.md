@@ -1,51 +1,42 @@
 # 智赢跨境 Skill
 
-面向亚马逊自然流的低 token 自动化初版。使用短 `SKILL.md` 和本地确定性脚本，按需读取接口资料，输出少量 JSON；运行命令不依赖 computer use。
+用简短的技能入口和 Python CLI 处理智赢本地诊断、产品资料和加价预览，以及亚马逊刊登预检、库存和销售流量。需要 Python 3.9+。Excel 工作簿读取使用可选依赖 `openpyxl`，智赢进程检查使用 Windows PowerShell。
 
-当前入口 1,630 字符，按英文约 4 字符/token 粗估为 408 token；这不是实际计费量，也不包含工具描述、条件参考资料和响应。
-
-当前可用：
-
-| 命令 | 功能 |
+| 命令 | 操作 |
 |---|---|
-| `status` | 检查本地智赢安装、进程、监听端口和扩展版本 |
-| `launch` | 尝试启动已安装的客户端；报告初次观察状态 |
-| `routes` | 从已安装扩展发现 HTTP 命令定义；不发送业务请求 |
-| `traffic-summary` | 摘要已下载的 Amazon Sales and Traffic JSON 报告 |
+| `status` / `launch` / `routes` | 检查或启动智赢，查看扩展中的命令定义 |
+| `erp-product-get` | 从本地商品表按产品编号或父 SKU 选取商品和变体 |
+| `erp-draft-preview` | 预填包装毛重和尺寸，批量试算变体加价并保存审阅稿 |
+| `traffic-summary` | 读取本地销售流量报告，按 ASIN/SKU 筛选、按指标排序或查看日期汇总 |
+| `listing-get` | 按 SKU 读取刊登状态、卖家报价、可售量和刊登问题 |
+| `listing-preview` | 将草稿交给 Amazon 预检，返回刊登问题 |
+| `fba-inventory` | 按 SKU 查看 FBA 可配送、在途和预留数量 |
+| `report-create` / `report-status` / `report-summary` | 申请报告、查询生成状态、在内存下载并汇总 |
 
-上品、在线报告下载、自动补货/止损和广告预算调整尚未实现。安装包中发现相关亚马逊方法，但账号授权、业务参数和调用链仍需验证。当前自然流流程不需要先接广告接口。
-
-## 使用
-
-需要 Python 3.9+。脚本仅依赖标准库；Windows 状态检查使用系统 PowerShell，报告摘要可跨平台运行。
+## 本地使用
 
 ```powershell
 python scripts/zhiying.py status
 python scripts/zhiying.py routes --match amazon --limit 5
-python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --limit 2
+python scripts/zhiying.py erp-product-get --file examples/erp-products.csv --product-id DEMO-1001
+python scripts/zhiying.py erp-draft-preview --file examples/erp-products.csv --product-id DEMO-1001 --add-amount 3.25 --currency CNY
+python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --sku DEMO-002 --limit 1
+python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --by date --limit 2
 ```
 
-示例报告是人工生成的测试数据，不是卖家账号数据。业务报告放在被忽略的 `reports/` 目录，例如：
+示例使用合成数据。实际报告可放在 Git 忽略的 `reports/` 目录。以关键词 `--help` 查看每条命令的参数。默认程序路径为 `D:\ZYing\ZYing.exe`，扩展路径为 `%LOCALAPPDATA%\ZYing\zying-ext.crx`。可在子命令前使用 `--app` 和 `--extension` 指定其他路径。`launch` 返回的是初次观察到的进程状态。
 
-```powershell
-python scripts/zhiying.py traffic-summary --file reports/sales-traffic.json --limit 10
-```
+商品表支持 CSV、TSV、JSON 和 XLSX。列名、单位、加价规则和结果说明见 [ERP 商品预览](references/erp-products.md)。
 
-默认程序路径为 `D:\ZYing\ZYing.exe`，扩展路径为 `%LOCALAPPDATA%\ZYing\zying-ext.crx`。路径参数放在子命令前：
+## Amazon 联机使用
 
-```powershell
-python scripts/zhiying.py --app 'E:\ZYing\ZYing.exe' --extension 'E:\extensions\zying-ext.crx' status
-```
+在线命令需要已获授权的 SP-API 应用和对应权限。`listing-preview` 固定使用 `VALIDATION_PREVIEW`；`report-create` 会向 Amazon 新建报告请求。配置、示例和结果解释见 [SP-API 操作说明](references/sp-api.md)。
 
-`launch` 只启动已有程序，不传入猜测的 `--help` 或调试参数。进程出现不代表登录和完整启动成功。初次实机测试观察到短暂进程，后续已退出，持续启动原因仍未验证。
+Sales and Traffic 覆盖整体页面流量。净利润和止损需要另有成本、费用、物流、退款和阈值。更多背景见 [亚马逊运营参考](references/amazon-organic.md)。
 
 ## 在 Codex 复用
 
-把这个仓库作为一个技能文件夹放到你的 Codex skills 目录，或在对话中指定本仓库的 `SKILL.md`。入口以脚本命令为主，按需读取 `references/amazon-organic.md` 和 `references/interfaces.md`，避免每轮重复扫描客户端或完整输出页面。
-
-Sales and Traffic 报告覆盖整体页面流量，不直接区分自然与广告归因。`unitSessionPercentage` 也不等于订单/session。止损需要成本、平台费用、物流和退款等信息，不能从销售额直接推算净利润。
-
-后续优先验证 SP-API 商品类型校验/刊登草稿、报告下载以及价格库存读取；再加入明确规则的放量、补货和止损建议。真正执行业务写入前，需要已授权账户和具体变更。
+将 `zhiying-cli` 文件夹放在 Codex 的技能搜索目录，或在对话里指定 [SKILL.md](SKILL.md)。入口只列常用命令。接口和业务资料按需读取。
 
 ## 验证
 
@@ -53,8 +44,4 @@ Sales and Traffic 报告覆盖整体页面流量，不直接区分自然与广�
 python -m unittest discover -s tests
 ```
 
-测试覆盖 CRX 2/3 封装解析、路由输出限制、报告字段、缺失 SKU 和错误输入。实机的状态、路由发现命令已验证；报告摘要同时按 Amazon 官方 schema 示例核对。没有调用卖家账户。
-
-## 官方参考
-
-详见 `references/sources.json`。Amazon 官方 Selling Partner skill/connector 与官方 SP-API SDK可作为后续接入候选；本仓库不假定 Codex 已具备 Amazon connector，也不包含账号令牌。
+测试覆盖本地扩展解析、商品选择、包装和价格预览、报告处理，以及模拟 HTTP 响应下的刊登、库存和报告流程。XLSX 测试在已安装 `openpyxl` 的环境运行。真实卖家账户联机验证需要已授权的 SP-API 应用。

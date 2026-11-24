@@ -20,7 +20,7 @@ Installed Chrome extension `zying-ext.crx`, version 5.2.1, contains `assets/js/c
 
 Path format is `/CmdHandler?cmd=<command>`. The transport serializes `data` with `JSON.stringify` and includes `token`, `appclient`, `timestamp`, `signature`, `version`, and `client_identify` headers. The signing helper is called with appClient `3` and version `v1.1`. Payload schemas and authenticated behavior were not validated. Command names alone do not establish whether an operation is read-only.
 
-These are client-internal endpoints, not a confirmed public integration API. No credentials, cookies, business databases or authenticated API responses were read. The supplied script inspects source definitions and never sends a business API request.
+These client-internal endpoints were identified through static inspection. The `routes` command reads their source definitions locally. The separate Amazon commands use the official [SP-API](sp-api.md).
 
 For actual business automation, first verify one intended operation and its payload/response through the application's legitimate authenticated client. Prefer a supported API where available. A browser session can preserve its normal request signing without exposing a token to the model. Build one deterministic command per verified operation and cap both fields and rows in its response. Do not invent a generic POST wrapper that assumes unsigned requests work.
 

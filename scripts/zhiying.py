@@ -1,4 +1,4 @@
-"""Compact, credential-free local probe for the installed ZYing client."""
+"""Compact ZYing diagnostics and Amazon seller operations."""
 import argparse
 import io
 import json
@@ -8,11 +8,16 @@ import subprocess
 import sys
 import time
 import zipfile
+from datetime import date
+from math import isfinite
 from pathlib import Path
 
 
+TRAFFIC_SORTS = ('source', 'sessions', 'units_ordered', 'unit_session_percentage')
+
+
 def emit(value):
-    print(json.dumps(value, ensure_ascii=False, separators=(',', ':')))
+    print(json.dumps(value, ensure_ascii=False, separators=(',', ':'), allow_nan=False))
 
 
 def archive_info(path):
@@ -117,42 +122,163 @@ def launch(app, extension):
             'running_at_check': bool(observed.get('processes')), **observed}
 
 
-def traffic_summary(path, limit):
+def traffic_summary(path, limit, **options):
     if path.stat().st_size > 50_000_000:
         raise ValueError('Report exceeds the probe size limit')
     report = json.loads(path.read_text(encoding='utf-8-sig'))
+    return {**summarize_traffic(report, limit, **options), 'business_requests_sent': 0}
+
+
+def optional_object(value):
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError('Report fields must contain JSON objects')
+    return value
+
+
+def traffic_row(row, by):
+    sales = optional_object(row.get('salesByAsin' if by == 'asin' else 'salesByDate'))
+    traffic = optional_object(row.get('trafficByAsin' if by == 'asin' else 'trafficByDate'))
+    money = optional_object(sales.get('orderedProductSales'))
+    identity = ({'sku': row.get('sku'), 'asin': row.get('childAsin') or row.get('parentAsin')}
+                if by == 'asin' else {'date': row.get('date')})
+    return {**identity, 'sessions': traffic.get('sessions'), 'page_views': traffic.get('pageViews'),
+            'units_ordered': sales.get('unitsOrdered'), 'sales': money.get('amount'),
+            'currency': money.get('currencyCode'), 'unit_session_percentage': traffic.get('unitSessionPercentage')}
+
+
+def sortable_metric(row, field):
+    value = row[field]
+    if value is None:
+        return (False, 0)
+    if type(value) not in (int, float) or (isinstance(value, float) and not isfinite(value)):
+        raise ValueError(f'Report field {field} must contain finite numbers')
+    return (True, value)
+
+
+def summarize_traffic(report, limit, *, by='asin', asin=None, sku=None, sort='source'):
     if not isinstance(report, dict):
         raise ValueError('Report must be a JSON object')
-    rows = report.get('salesAndTrafficByAsin')
+    if by == 'date' and (asin is not None or sku is not None):
+        raise ValueError('ASIN and SKU filters require --by asin')
+    rows = report.get('salesAndTrafficByAsin' if by == 'asin' else 'salesAndTrafficByDate')
     if not isinstance(rows, list):
-        raise ValueError('Expected a Sales and Traffic JSON report with ASIN rows')
+        raise ValueError(f'Expected a Sales and Traffic JSON report with {by.upper()} rows')
+    matched = 0
     selected = []
-    def optional_object(value):
-        if value is None:
-            return {}
-        if not isinstance(value, dict):
-            raise ValueError('Report fields must contain JSON objects')
-        return value
-    for row in rows[:limit]:
+    filtered = asin is not None or sku is not None
+    candidates = rows[:limit] if sort == 'source' and not filtered else rows
+    for row in candidates:
         if not isinstance(row, dict):
-            raise ValueError('Each ASIN row must be a JSON object')
-        sales = optional_object(row.get('salesByAsin'))
-        traffic = optional_object(row.get('trafficByAsin'))
-        money = optional_object(sales.get('orderedProductSales'))
-        selected.append({'sku': row.get('sku'), 'asin': row.get('childAsin') or row.get('parentAsin'),
-                         'sessions': traffic.get('sessions'), 'page_views': traffic.get('pageViews'),
-                         'units_ordered': sales.get('unitsOrdered'), 'sales': money.get('amount'),
-                         'currency': money.get('currencyCode'),
-                         'unit_session_percentage': traffic.get('unitSessionPercentage')})
+            raise ValueError('Each report row must be a JSON object')
+        if asin is not None and asin.upper() not in (row.get('childAsin'), row.get('parentAsin')):
+            continue
+        if sku is not None and sku != row.get('sku'):
+            continue
+        matched += 1
+        if sort != 'source' or len(selected) < limit:
+            selected.append(traffic_row(row, by))
+    if sort != 'source':
+        selected.sort(key=lambda row: sortable_metric(row, sort), reverse=True)
+        selected = selected[:limit]
     specification = optional_object(report.get('reportSpecification'))
-    return {'report_type': specification.get('reportType'), 'start': specification.get('dataStartTime'),
-            'end': specification.get('dataEndTime'), 'marketplaces': specification.get('marketplaceIds'),
-            'traffic_scope': 'all_page_traffic_not_organic_attribution', 'total_rows': len(rows),
-            'returned': len(selected), 'rows': selected,
-            'net_profit': 'requires_costs_and_fees', 'business_requests_sent': 0}
+    result = {'report_type': specification.get('reportType'), 'start': specification.get('dataStartTime'),
+              'end': specification.get('dataEndTime'), 'marketplaces': specification.get('marketplaceIds'),
+              'traffic_scope': 'all_page_traffic_not_organic_attribution', 'total_rows': len(rows),
+              'returned': len(selected), 'rows': selected, 'net_profit': 'requires_costs_and_fees'}
+    if filtered:
+        result['matched_rows'] = matched
+    return result
+
+
+def add_limit(parser):
+    parser.add_argument('--limit', type=int, choices=range(1, 51), default=10, metavar='1..50')
+
+
+def add_traffic_options(parser):
+    parser.add_argument('--by', choices=('asin', 'date'), default='asin')
+    parser.add_argument('--asin', help='match child or parent ASIN')
+    parser.add_argument('--sku', help='match seller SKU exactly')
+    parser.add_argument('--sort', choices=TRAFFIC_SORTS, default='source', help='numeric sorts are descending')
+    add_limit(parser)
+
+
+def traffic_options(args):
+    if args.by == 'date' and (args.asin is not None or args.sku is not None):
+        raise ValueError('ASIN and SKU filters require --by asin')
+    return {'by': args.by, 'asin': args.asin, 'sku': args.sku, 'sort': args.sort}
+
+
+def add_erp_commands(commands):
+    source = argparse.ArgumentParser(add_help=False)
+    source.add_argument('--file', type=Path, required=True, help='local CSV, TSV, JSON or XLSX product table')
+    source.add_argument('--sheet', help='worksheet name for XLSX')
+    selector = source.add_mutually_exclusive_group(required=True)
+    selector.add_argument('--product-id', help='exact ERP product number')
+    selector.add_argument('--parent-sku', help='exact parent SKU for tables grouped by SKU')
+    source.add_argument('--price-column', help='explicit base price column header')
+    add_limit(source)
+    commands.add_parser('erp-product-get', parents=[source], help='select a product from a local table')
+    preview = commands.add_parser('erp-draft-preview', parents=[source], help='preview package details and variant markup')
+    rule = preview.add_mutually_exclusive_group(required=True)
+    rule.add_argument('--add-amount', help='add this fixed amount to each variant')
+    rule.add_argument('--markup-percent', help='add this percentage to each variant')
+    preview.add_argument('--currency', help='expected currency, also used for rows without a currency')
+    preview.add_argument('--decimals', type=int, choices=range(0, 5), default=2, help='price decimal places')
+    preview.add_argument('--gross-weight-g', help='set package gross weight in grams for the selected rows')
+    preview.add_argument('--package-cm', help='set package length x width x height in centimeters')
+    preview.add_argument('--output', type=Path, help='save the full review as a new JSON file')
+
+
+def add_sp_api_commands(commands, regions):
+    regional = argparse.ArgumentParser(add_help=False)
+    regional.add_argument('--region', choices=regions, required=True)
+    marketplace = argparse.ArgumentParser(add_help=False, parents=[regional])
+    marketplace.add_argument('--marketplace', required=True, help='Amazon marketplace ID')
+    listing = argparse.ArgumentParser(add_help=False, parents=[marketplace])
+    listing.add_argument('--sku', required=True)
+    add_limit(listing)
+    commands.add_parser('listing-get', parents=[listing], help='read listing status, offers and availability')
+    preview = commands.add_parser('listing-preview', parents=[listing], help='validate a listing draft with Amazon')
+    preview.add_argument('--file', type=Path, required=True)
+    inventory = commands.add_parser('fba-inventory', parents=[listing], help='read FBA stock for a SKU')
+    inventory.add_argument('--next-token')
+    create = commands.add_parser('report-create', parents=[marketplace], help='request a Sales and Traffic report')
+    create.add_argument('--start', type=date.fromisoformat, required=True, metavar='YYYY-MM-DD')
+    create.add_argument('--end', type=date.fromisoformat, required=True, metavar='YYYY-MM-DD')
+    create.add_argument('--date-granularity', choices=('DAY', 'WEEK', 'MONTH'), default='DAY')
+    create.add_argument('--asin-granularity', choices=('PARENT', 'CHILD', 'SKU'), default='CHILD')
+    report = argparse.ArgumentParser(add_help=False, parents=[regional])
+    report.add_argument('--report-id', required=True)
+    commands.add_parser('report-status', parents=[report], help='check a Sales and Traffic report')
+    summary = commands.add_parser('report-summary', parents=[report], help='download and summarize in memory')
+    add_traffic_options(summary)
+
+
+def sp_api_result(args, sp_api):
+    api = sp_api.SellingPartnerAPI(args.region)
+    if args.action == 'listing-get':
+        return sp_api.get_listing(api, args.marketplace, args.sku, args.limit)
+    if args.action == 'listing-preview':
+        return sp_api.preview_listing(api, args.marketplace, args.sku, args.file, args.limit)
+    if args.action == 'fba-inventory':
+        return sp_api.fba_inventory(api, args.marketplace, args.sku, args.next_token, args.limit)
+    if args.action == 'report-create':
+        return sp_api.create_report(api, args.marketplace, args.start, args.end,
+                                    args.date_granularity, args.asin_granularity)
+    options = traffic_options(args) if args.action == 'report-summary' else None
+    metadata, document_id = sp_api.report_status(api, args.report_id)
+    if options is None or document_id is None:
+        return metadata
+    summary = summarize_traffic(api.report_document(document_id), args.limit, **options)
+    return {**metadata, **{key: value for key, value in summary.items() if value is not None}}
 
 
 def main():
+    import erp_products
+    import sp_api
+
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description=__doc__)
@@ -160,14 +286,16 @@ def main():
     parser.add_argument('--extension', type=Path,
                         default=Path(os.environ.get('LOCALAPPDATA', '.')) / 'ZYing' / 'zying-ext.crx')
     commands = parser.add_subparsers(dest='action', required=True)
-    commands.add_parser('status')
-    commands.add_parser('launch')
-    route_parser = commands.add_parser('routes')
+    commands.add_parser('status', help='inspect local ZYing installation and processes')
+    commands.add_parser('launch', help='start the installed ZYing client')
+    route_parser = commands.add_parser('routes', help='inspect local extension route definitions')
     route_parser.add_argument('--match', default='')
-    route_parser.add_argument('--limit', type=int, choices=range(1, 51), default=10, metavar='1..50')
-    report_parser = commands.add_parser('traffic-summary')
+    add_limit(route_parser)
+    report_parser = commands.add_parser('traffic-summary', help='summarize a local Sales and Traffic JSON')
     report_parser.add_argument('--file', type=Path, required=True)
-    report_parser.add_argument('--limit', type=int, choices=range(1, 51), default=10, metavar='1..50')
+    add_traffic_options(report_parser)
+    add_erp_commands(commands)
+    add_sp_api_commands(commands, sp_api.REGIONS)
     args = parser.parse_args()
     args.app = args.app.resolve()
     args.extension = args.extension.resolve()
@@ -178,12 +306,34 @@ def main():
             result = launch(args.app, args.extension)
         elif args.action == 'routes':
             result = routes(args.extension, args.match, args.limit)
+        elif args.action == 'traffic-summary':
+            result = traffic_summary(args.file, args.limit, **traffic_options(args))
+        elif args.action in ('erp-product-get', 'erp-draft-preview'):
+            result = erp_products.product_result(args, preview=args.action == 'erp-draft-preview')
         else:
-            result = traffic_summary(args.file.resolve(), args.limit)
+            result = sp_api_result(args, sp_api)
         emit(result)
         return 0
-    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired, zipfile.BadZipFile, KeyError):
-        emit({'ok': False, 'error': 'Probe failed; verify the installation, package path and Windows process access'})
+    except erp_products.ProductError as error:
+        emit({'ok': False, 'error': str(error)})
+        return 1
+    except sp_api.AmazonError as error:
+        result = {'ok': False, 'error': str(error)}
+        if error.http_status is not None:
+            result['http_status'] = error.http_status
+        if error.request_id is not None:
+            result['request_id'] = error.request_id
+        emit(result)
+        return 1
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired, zipfile.BadZipFile, KeyError,
+            TypeError, AttributeError):
+        if args.action in ('status', 'launch', 'routes'):
+            message = 'Probe failed. Verify the installation, package path and Windows process access.'
+        elif args.action in ('traffic-summary', 'listing-preview', 'erp-product-get', 'erp-draft-preview'):
+            message = 'Could not process the input. Check the file path, JSON contents and command options.'
+        else:
+            message = 'Could not process the Amazon response.'
+        emit({'ok': False, 'error': message})
         return 1
 
 
