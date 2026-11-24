@@ -7,6 +7,7 @@
 | `status` / `launch` / `routes` | 检查或启动智赢，查看扩展中的命令定义 |
 | `erp-product-get` | 从本地商品表按产品编号或父 SKU 选取商品和变体 |
 | `erp-draft-preview` | 预填包装毛重和尺寸，批量试算变体加价并保存审阅稿 |
+| `listing-copy-check` | 检查美国站五个英文字段、排除指定品牌和原厂暗示，可返回智赢英文栏位 |
 | `traffic-summary` | 读取本地销售流量报告，按 ASIN/SKU 筛选、按指标排序或查看日期汇总 |
 | `listing-get` | 按 SKU 读取刊登状态、卖家报价、可售量和刊登问题 |
 | `listing-preview` | 将草稿交给 Amazon 预检，返回刊登问题 |
@@ -27,6 +28,8 @@ python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --b
 示例使用合成数据。实际报告可放在 Git 忽略的 `reports/` 目录。以关键词 `--help` 查看每条命令的参数。默认程序路径为 `D:\ZYing\ZYing.exe`，扩展路径为 `%LOCALAPPDATA%\ZYing\zying-ext.crx`。可在子命令前使用 `--app` 和 `--extension` 指定其他路径。`launch` 返回的是初次观察到的进程状态。
 
 商品表支持 CSV、TSV、JSON 和 XLSX。列名、单位、加价规则和结果说明见 [ERP 商品预览](references/erp-products.md)。
+
+商品介绍缺失时，按 [Amazon.com 文案流程](references/listing-workflow.md) 先核验并生成缺失内容，再用 `listing-copy-check` 检查。主图、场景图、细节图和尺寸图的制作边界见 [商品图片](references/listing-images.md)。
 
 ## Amazon 联机使用
 

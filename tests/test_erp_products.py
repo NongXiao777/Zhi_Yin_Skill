@@ -91,6 +91,24 @@ class ProductCLITests(unittest.TestCase):
         self.assertEqual(precise['gross_weight_source'], 'description')
         self.assertEqual(ambiguous['issues'], ['conflicting_gross_weight_g_in_description', 'missing_package_cm'])
 
+    def test_packaging_estimate_fills_gaps_preserves_existing_values_and_needs_no_price(self):
+        path = self.folder / 'packing.json'
+        path.write_text(json.dumps([
+            {'product_id': '001', 'sku': 'MEASURED', 'gross_weight_g': '195', 'package_cm': [12, 9, 6]},
+            {'product_id': '001', 'sku': 'ESTIMATED'},
+        ]), encoding='utf-8')
+        args = ('erp-draft-preview', '--file', path, '--product-id', '001', '--estimated-gross-weight-g', '200',
+                '--estimated-package-cm', '13x10x8')
+        self.assertIn('--estimate-basis', self.run_cli(*args, code=1)['error'])
+        result = self.run_cli(*args, '--estimate-basis', 'Single unit in a foam-lined carton')
+        self.assertTrue(result['ready_for_review'])
+        measured, estimated = result['variants']
+        self.assertEqual((measured['gross_weight_g'], measured['gross_weight_source']), ('195', 'column'))
+        self.assertEqual((measured['package_cm'], measured['package_size_source']), (['12', '9', '6'], 'column'))
+        self.assertEqual((estimated['gross_weight_g'], estimated['gross_weight_source']), ('200', 'estimated'))
+        self.assertEqual(estimated['package_estimate_basis'], 'Single unit in a foam-lined carton')
+        self.assertNotIn('proposed_price', estimated)
+
     @unittest.skipUnless(importlib.util.find_spec('openpyxl'), 'XLSX support uses optional openpyxl')
     def test_xlsx_reads_named_sheet(self):
         from openpyxl import Workbook

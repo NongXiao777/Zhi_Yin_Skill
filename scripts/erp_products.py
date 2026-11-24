@@ -198,7 +198,7 @@ def decimal_text(value):
     return format(value, 'f') if value is not None else None
 
 
-def package_value(value, override, description, field, parser, pattern, units, issues):
+def package_value(value, override, estimate, description, field, parser, pattern, units, issues):
     if override is not None:
         return override, 'override'
     if cell(value):
@@ -217,11 +217,14 @@ def package_value(value, override, description, field, parser, pattern, units, i
     if matches:
         values = matches.pop()
         return (values[0] if len(values) == 1 else values), 'description'
+    if estimate is not None:
+        return estimate, 'estimated'
     issues.append(f'missing_{field}')
     return None, None
 
 
-def product_rows(selected, *, weight=None, size=None, currency=None, add=None, percent=None, decimals=2):
+def product_rows(selected, *, weight=None, size=None, currency=None, add=None, percent=None, decimals=2,
+                 estimated_weight=None, estimated_size=None, estimate_basis=None, check_price=True):
     skus = Counter(cell(values['sku']) for _, values in selected if cell(values['sku']))
     labels = Counter(cell(values['variant']) for _, values in selected if cell(values['variant']))
     quantizer = Decimal(1).scaleb(-decimals)
@@ -232,15 +235,16 @@ def product_rows(selected, *, weight=None, size=None, currency=None, add=None, p
             issues.append('duplicate_sku')
         if not sku and len(selected) > 1 and (not variant or labels[variant] > 1):
             issues.append('ambiguous_variant')
-        base = parse_field(values['price'], 'base_price', decimal_value, issues)
+        price_issues = issues if check_price else []
+        base = parse_field(values['price'], 'base_price', decimal_value, price_issues)
         description = cell(values['description'])
-        mass, mass_source = package_value(values['weight'], weight, description, 'gross_weight_g', positive_decimal,
-                                          DESCRIBED_WEIGHT, WEIGHT_UNITS, issues)
-        dimensions, size_source = package_value(values['size'], size, description, 'package_cm', package_dimensions,
-                                                DESCRIBED_SIZE, SIZE_UNITS, issues)
-        code = parse_field(values['currency'] or currency, 'currency', currency_code, issues)
+        mass, mass_source = package_value(values['weight'], weight, estimated_weight, description, 'gross_weight_g',
+                                          positive_decimal, DESCRIBED_WEIGHT, WEIGHT_UNITS, issues)
+        dimensions, size_source = package_value(values['size'], size, estimated_size, description, 'package_cm',
+                                                package_dimensions, DESCRIBED_SIZE, SIZE_UNITS, issues)
+        code = parse_field(values['currency'] or currency, 'currency', currency_code, price_issues)
         if currency and code and currency != code:
-            issues.append('currency_mismatch')
+            price_issues.append('currency_mismatch')
         result = {
             'source_row': index, 'product_id': cell(values['product_id']) or None,
             'parent_sku': cell(values['parent_sku']) or None, 'sku': sku or None, 'variant': variant or None,
@@ -249,6 +253,8 @@ def product_rows(selected, *, weight=None, size=None, currency=None, add=None, p
             'gross_weight_source': mass_source, 'package_size_source': size_source,
             'issues': issues,
         }
+        if 'estimated' in (mass_source, size_source):
+            result['package_estimate_basis'] = estimate_basis
         if add is not None or percent is not None:
             proposed = None
             if base is not None and code and 'currency_mismatch' not in issues:
@@ -270,16 +276,28 @@ def product_result(args, *, preview=False):
         currency = currency_code(args.currency) if args.currency is not None else None
         if add is not None and currency is None:
             raise ProductError('--add-amount requires --currency')
+        pricing = add is not None or percent is not None
+        estimate_basis = cell(args.estimate_basis)
+        estimated_weight = (positive_decimal(args.estimated_gross_weight_g)
+                            if args.estimated_gross_weight_g is not None else None)
+        estimated_size = (package_dimensions(args.estimated_package_cm)
+                          if args.estimated_package_cm is not None else None)
+        if (estimated_weight is not None or estimated_size is not None) and not 0 < len(estimate_basis) <= 300:
+            raise ProductError('Provide --estimate-basis with 1 to 300 characters for estimated packaging')
         options = {
             'weight': positive_decimal(args.gross_weight_g) if args.gross_weight_g is not None else None,
             'size': package_dimensions(args.package_cm) if args.package_cm is not None else None,
             'currency': currency, 'add': add, 'percent': percent, 'decimals': args.decimals,
+            'estimated_weight': estimated_weight, 'estimated_size': estimated_size,
+            'estimate_basis': estimate_basis, 'check_price': pricing,
         }
-        result.update(mode='preview', pricing={
-            'rule': 'add_amount' if add is not None else 'markup_percent',
-            'value': decimal_text(add if add is not None else percent), 'decimals': args.decimals,
-            'currency': currency, 'price_column': args.price_column,
-        })
+        result['mode'] = 'preview'
+        if pricing:
+            result['pricing'] = {
+                'rule': 'add_amount' if add is not None else 'markup_percent',
+                'value': decimal_text(add if add is not None else percent), 'decimals': args.decimals,
+                'currency': currency, 'price_column': args.price_column,
+            }
     rows = list(product_rows(selected, **options))
     issue_counts = Counter(issue for row in rows for issue in row['issues'])
     result.update(total_variants=len(rows), issue_counts=dict(issue_counts))

@@ -123,7 +123,7 @@ class SellingPartnerAPI:
         data = None if body is None else json.dumps(body, ensure_ascii=False, allow_nan=False).encode('utf-8')
         headers = {
             'Accept': 'application/json',
-            'User-Agent': 'zhiying-cli/0.3.0 (Language=Python)',
+            'User-Agent': 'zhiying-cli/0.4.0 (Language=Python)',
             'x-amz-access-token': self.access_token(),
             'x-amz-date': datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
         }

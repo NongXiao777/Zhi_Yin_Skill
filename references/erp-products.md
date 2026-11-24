@@ -34,3 +34,13 @@ python scripts/zhiying.py erp-draft-preview --file examples/erp-products.csv --p
 - `--add-amount` 在各变体原价上加相同金额，需配合 `--currency`。`--markup-percent 15` 表示各自原价乘 `1.15`。`--currency` 可补空币种，已有币种与它不符的行会标出。
 - `--gross-weight-g` 和 `--package-cm` 给所选变体统一填值。省略时先读包装列，列为空才读英文介绍中明确标注的包装数据，并标明来源。净重、产品本身尺寸或有冲突的数值留给人工确认。变体分别使用自己的原价计算。默认按四舍五入保留两位，可用 `--decimals` 调整。
 - `issue_counts` 统计全组缺项和冲突，`ready_for_review` 表示输入检查通过。`--limit` 仅限制终端输出，`--output` 写入全组结果。现有预览文件用新的文件名保留。
+
+## 缺失时估算包装
+
+先按一个实际可售包装核对件数、附件、本体长宽高和重量。优先用匹配变体的规格或供应商包装数据。如果只能找到同系列或相近款，把来源、差异和包材假设写在 `--estimate-basis`，以克和厘米给出保守的单件建议。包装件数不明的外箱数据只作为参考空间。支架单卖、带支架套装和纯电机按实际内容分别估算。
+
+```powershell
+python scripts/zhiying.py erp-draft-preview --file products.csv --product-id MY-ID --estimated-gross-weight-g 200 --estimated-package-cm 13x10x8 --estimate-basis '同系列参考；单件，纸盒加泡沫'
+```
+
+省略加价参数可以单独预览包装。估算标成 `estimated`，仅补缺项，保留已有值和明确标注的包装数据。冲突值会被提示。估算可用于 ERP 草稿和物流预算，实际出货或 FBA 填报时复核封装后的尺寸和毛重。买家文案和产品尺寸图使用已核实的商品规格。

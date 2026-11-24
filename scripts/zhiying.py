@@ -221,13 +221,16 @@ def add_erp_commands(commands):
     add_limit(source)
     commands.add_parser('erp-product-get', parents=[source], help='select a product from a local table')
     preview = commands.add_parser('erp-draft-preview', parents=[source], help='preview package details and variant markup')
-    rule = preview.add_mutually_exclusive_group(required=True)
+    rule = preview.add_mutually_exclusive_group()
     rule.add_argument('--add-amount', help='add this fixed amount to each variant')
     rule.add_argument('--markup-percent', help='add this percentage to each variant')
     preview.add_argument('--currency', help='expected currency, also used for rows without a currency')
     preview.add_argument('--decimals', type=int, choices=range(0, 5), default=2, help='price decimal places')
     preview.add_argument('--gross-weight-g', help='set package gross weight in grams for the selected rows')
     preview.add_argument('--package-cm', help='set package length x width x height in centimeters')
+    preview.add_argument('--estimated-gross-weight-g', help='estimated gross weight for rows missing it')
+    preview.add_argument('--estimated-package-cm', help='estimated package length x width x height for rows missing it')
+    preview.add_argument('--estimate-basis', help='source and packing assumptions for the estimate')
     preview.add_argument('--output', type=Path, help='save the full review as a new JSON file')
 
 
@@ -277,6 +280,7 @@ def sp_api_result(args, sp_api):
 
 def main():
     import erp_products
+    import listing_copy
     import sp_api
 
     if hasattr(sys.stdout, 'reconfigure'):
@@ -295,6 +299,10 @@ def main():
     report_parser.add_argument('--file', type=Path, required=True)
     add_traffic_options(report_parser)
     add_erp_commands(commands)
+    copy_check = commands.add_parser('listing-copy-check', help='check Amazon.com text and optionally map ERP fields')
+    copy_check.add_argument('--file', type=Path, required=True)
+    copy_check.add_argument('--blocked-brand', action='append', default=[], help='brand name to exclude, repeatable')
+    copy_check.add_argument('--erp-fields', action='store_true', help='include the five ZYing ERP text fields on pass')
     add_sp_api_commands(commands, sp_api.REGIONS)
     args = parser.parse_args()
     args.app = args.app.resolve()
@@ -310,11 +318,13 @@ def main():
             result = traffic_summary(args.file, args.limit, **traffic_options(args))
         elif args.action in ('erp-product-get', 'erp-draft-preview'):
             result = erp_products.product_result(args, preview=args.action == 'erp-draft-preview')
+        elif args.action == 'listing-copy-check':
+            result = listing_copy.check_copy(args.file, args.blocked_brand, include_erp=args.erp_fields)
         else:
             result = sp_api_result(args, sp_api)
         emit(result)
-        return 0
-    except erp_products.ProductError as error:
+        return 1 if args.action == 'listing-copy-check' and not result['copy_checks_pass'] else 0
+    except (erp_products.ProductError, listing_copy.ListingCopyError) as error:
         emit({'ok': False, 'error': str(error)})
         return 1
     except sp_api.AmazonError as error:
@@ -329,7 +339,7 @@ def main():
             TypeError, AttributeError):
         if args.action in ('status', 'launch', 'routes'):
             message = 'Probe failed. Verify the installation, package path and Windows process access.'
-        elif args.action in ('traffic-summary', 'listing-preview', 'erp-product-get', 'erp-draft-preview'):
+        elif args.action in ('traffic-summary', 'listing-preview', 'erp-product-get', 'erp-draft-preview', 'listing-copy-check'):
             message = 'Could not process the input. Check the file path, JSON contents and command options.'
         else:
             message = 'Could not process the Amazon response.'
