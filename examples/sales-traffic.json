@@ -1,0 +1,21 @@
+{
+  "reportSpecification": {
+    "reportType": "GET_SALES_AND_TRAFFIC_REPORT",
+    "reportOptions": {"dateGranularity": "DAY", "asinGranularity": "SKU"},
+    "dataStartTime": "2026-11-01",
+    "dataEndTime": "2026-11-07",
+    "marketplaceIds": ["ATVPDKIKX0DER"]
+  },
+  "salesAndTrafficByAsin": [
+    {
+      "parentAsin": "B0TEST0000", "childAsin": "B0TEST0001", "sku": "DEMO-001",
+      "salesByAsin": {"unitsOrdered": 1, "orderedProductSales": {"amount": 20, "currencyCode": "USD"}},
+      "trafficByAsin": {"sessions": 20, "pageViews": 30, "unitSessionPercentage": 5}
+    },
+    {
+      "parentAsin": "B0TEST0000", "childAsin": "B0TEST0002", "sku": "DEMO-002",
+      "salesByAsin": {"unitsOrdered": 2, "orderedProductSales": {"amount": 50, "currencyCode": "USD"}},
+      "trafficByAsin": {"sessions": 50, "pageViews": 70, "unitSessionPercentage": 4}
+    }
+  ]
+}

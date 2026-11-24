@@ -1,0 +1,74 @@
+{
+  "checked_on": "2026-11-20",
+  "priority": "Amazon natural traffic: product publication, price/stock, sales and traffic reports. Advertising is a future extension.",
+  "inspection": "Read-only PE metadata, manifest resource names and exact constant-name searches in installed ZYing*.dll. No business code, credentials, account records or network requests were used.",
+  "amazon": {
+    "api_type": "AmzService.Amz",
+    "assembly": "ZYing.Work.dll",
+    "listing_methods": [
+      {"method": "GetListingsItem_20210801", "parameters": ["sku", "includedData"]},
+      {"method": "PutListingsItem", "parameters": ["sku", "productType", "requirements", "attributes"]},
+      {"method": "SearchListingsItems", "parameters": ["request"]},
+      {"method": "CreateFeed", "parameters": ["feed"]},
+      {"method": "GetFeed", "parameters": ["feedId"]},
+      {"method": "GetFeedDocument", "parameters": ["docId"]}
+    ],
+    "price_read_methods": [
+      {"method": "GetPrice", "parameters": ["query"]},
+      {"method": "GetItemOffersByAsin", "parameters": ["asin", "itemCondition", "CustomerType"]},
+      {"method": "GetItemOffersBatch", "parameters": ["asins", "itemCondition"]}
+    ],
+    "listing_schema": {
+      "PutListingsItem": ["sellerId", "sku", "marketIds", "issueLocale", "productType", "requirements", "attributes"],
+      "PatchListingsItem": ["sellerId", "sku", "marketIds", "issueLocale", "body"],
+      "ListingsItemV20210801": ["sku", "summaries", "attributes", "issues", "offers", "fulfillmentAvailability", "procurement", "relationships", "productTypes"],
+      "AmzListingItemInfo": ["Sku", "Asin", "ItemName", "Currency", "OurPrice", "Offers", "FulfillmentChannelCode", "LeadTimeToShipMaxDays"],
+      "Inventorysummary": ["asin", "fnSku", "sellerSku", "condition", "lastUpdatedTime", "productName", "totalQuantity", "inventoryDetails"]
+    },
+    "report_methods": [
+      {"method": "CreateReport", "parameters": ["req"]},
+      {"method": "CreateReport", "parameters": ["reprot", "startTime", "endTime", "marketIds"]},
+      {"method": "GetReports", "parameters": ["report", "marketIds"]},
+      {"method": "GetReports", "parameters": ["query"]},
+      {"method": "GetReport", "parameters": ["reportId", "throwOnNotDone"]},
+      {"method": "GetReportDocId", "parameters": ["reportId", "throwOnNotDone"]},
+      {"method": "GetReportDocResult", "parameters": ["reportId", "maxRetry"]},
+      {"method": "GetReportContentByReportId", "parameters": ["reportId", "maxRetry"]},
+      {"method": "GetReportDocument", "parameters": ["docId"]},
+      {"method": "DownloadReport", "parameters": ["docId"]},
+      {"method": "DownloadReportStream", "parameters": ["docId"]}
+    ],
+    "report_schema": {
+      "CreateReportRequest": ["reportType", "marketplaceIds", "dataStartTime", "dataEndTime", "reportOptions"],
+      "GetReportsQuery": ["reportTypes", "processingStatuses", "marketplaceIds", "pageSize", "createdSince", "createdUntil", "nextToken"],
+      "ReportDocResult": ["reportType", "processingStatus", "reportDocumentId", "reportId", "marketplaceIds", "dataStartTime", "dataEndTime"],
+      "ReportDocResponse": ["reportDocumentId", "compressionAlgorithm", "url"]
+    },
+    "report_type_constants_found_in_work_dll": [
+      "GET_SALES_AND_TRAFFIC_REPORT",
+      "GET_MERCHANT_LISTINGS_ALL_DATA",
+      "GET_MERCHANT_LISTINGS_DATA",
+      "GET_MERCHANT_LISTINGS_DATA_BACK_COMPAT",
+      "GET_MERCHANT_LISTINGS_DATA_LITE",
+      "GET_MERCHANT_LISTINGS_INACTIVE_DATA",
+      "GET_MERCHANT_CANCELLED_LISTINGS_DATA",
+      "GET_FLAT_FILE_OPEN_LISTINGS_DATA"
+    ],
+    "verified_limit": "Compiled listing and report capabilities plus the sales/traffic report name are confirmed. The actual account's report roles, marketplaces, scopes and business-data availability are not checked. No explicit Amazon sessions/conversion model fields or readable standalone price/stock mutation method were identified. Generic listing/feed methods are potential mutation routes, not a validated external CLI or ERP command schema."
+  },
+  "future_advertising": {
+    "amazon_module_present": true,
+    "assembly": "ZYing.User.dll",
+    "named_types": ["ZYing.Channel.亚马逊广告授权列表", "ZYing.Channel.SP广告_广告活动", "ZYing.Channel.SP广告_广告位", "ZYing.Channel.SP广告元数据", "ZYing.Channel.SB广告元数据", "ZYing.Channel.SD广告元数据", "ZYing.Channel.ST广告元数据", "ZYing.Channel.ZAds广告效果分析", "ZYing.Channel.ZAds店铺业绩"],
+    "metadata_methods": {"type": "ZYing.Channel.AdsMeta", "methods": ["Campaign(program)", "AdGroup(program)", "Ad(program)", "Target(program)", "Portfolio()", "Money(key,title)"]},
+    "authorization": {"assembly": "ZYing.Work.dll", "method": "ZYing.AmzAds.AmzAds.GetAuthUrl(area,state)"},
+    "verified_budget_mutation_method": false,
+    "limit": "Campaign/AdGroup metadata and UI modules establish advertisement feature presence, not callable UpdateBudget/SetBid/PauseCampaign endpoints. Many implementation names and strings are obfuscated."
+  },
+  "zrpc_catalog": {
+    "named_advertising_methods_found": false,
+    "platform_families": ["Ozon", "Wildberries", "Yandex", "Hepsi"],
+    "limit": "Readable Zrpc types do not include an Amazon advertisement API. Other platform methods must not be substituted for the requested Amazon workflow."
+  },
+  "supporting_files": ["amazon-metadata.json", "ad-schemas.json", "zrpc-catalog.json", "scan-amazon.ps1", "scan-ad-schemas.ps1", "scan-commerce.ps1"]
+}
