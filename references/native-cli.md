@@ -49,7 +49,7 @@ python scripts/zhiying.py product-apply --session work/session.local.json --plan
 python scripts/zhiying.py product-restore --session work/session.local.json --plan work/plan.local.json
 ```
 
-`product-plan` 会读取商品并保存预览、原值、预期内容和指纹，不提交。`product-apply` 先重读检查竞争改动，再记录写入意图、提交一次并读回；响应丢失后保留 `write_attempted`，不能自动重放。`product-restore` 只在目标字段仍属于该计划时还原，避免覆盖别人的后续修改。计划包含完整变体集合和商品原值，应留在 `work/` 或 `*.local.json` 中。
+`product-plan` 会读取商品并保存预览、原值、预期内容和指纹，不提交。`product-apply` 先重读检查竞争改动，再记录写入意图、提交一次并读回；响应丢失后保留 `write_attempted`，不能自动重放。Apply/restore 在完整流程中持有操作系统文件锁，同一计划的并发调用会被拒绝，进程退出时锁自动释放。`product-restore` 只在目标字段仍属于该计划时还原，避免覆盖别人的后续修改。计划包含完整变体集合和商品原值，应留在 `work/` 或 `*.local.json` 中。
 
 当前提交候选为 `id` 加改动列：`sale_stock` 或 `sale_intro`。保留其他变体和语言的合并已通过本地测试，但服务器接受的最小字段集合、并发版本要求及发布/同步副作用未验证。`sale_stock` 整列包含完整变体数组，不是单变体 PATCH。
 

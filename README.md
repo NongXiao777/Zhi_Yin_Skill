@@ -1,73 +1,53 @@
 # 智赢跨境 Skill
 
-用于智赢客户端窗口检查、原生商品接口调试和亚马逊报表摘要。使用短 `SKILL.md` 和固定的本地脚本，按需读取接口资料，输出少量 JSON；运行命令不依赖 computer use。
+用简短的技能入口和 Python CLI 处理智赢本地诊断、产品资料和加价预览，以及亚马逊刊登预检、库存和销售流量。需要 Python 3.9+。Excel 工作簿读取使用可选依赖 `openpyxl`，智赢进程检查使用 Windows PowerShell。
 
-当前可用：
-
-| 命令 | 功能 |
+| 命令 | 操作 |
 |---|---|
-| `status` | 检查本地智赢安装、进程、监听端口和扩展版本 |
-| `launch` | 尝试启动已安装的客户端；报告初次观察状态 |
-| `window-status` | 查找指定安装路径的现有窗口，报告标题及前台状态 |
-| `window-focus` | 激活已运行的智赢窗口，核对窗口响应及前台状态 |
-| `routes` | 从已安装扩展发现 HTTP 命令定义；不发送业务请求 |
-| `traffic-summary` | 摘要已下载的 Amazon Sales and Traffic JSON 报告 |
-| `session-export` | 只读导出当前客户端指定会话字段，保存为 Windows DPAPI 保护文件 |
-| `product-detail` | 通过原生 TCP 请求商品详情，返回有限变体及字段摘要 |
-| `product-plan` | 根据 JSON 指令读取商品并生成改动预览和本地还原计划，不写商品 |
-| `product-apply` | 提交已保存计划一次，再读回核对 |
-| `product-restore` | 检查目标字段后，还原计划中的原值并读回 |
+| `status` / `launch` / `routes` | 检查或启动智赢，查看扩展中的命令定义 |
+| `window-status` / `window-focus` | 按明确请求检查现有窗口或切到前台 |
+| `collected-transport-probe` | 无窗口加载原生 TCP 组件并验证请求编码 |
+| `collected-product-live-get` / `collected-product-live-edit` | 通过原生或自定义 TCP 执行器读取价格和文案、修改加价或选定文案并读回 |
+| `session-export` | 只读导出当前 Windows 客户端会话，保存为 DPAPI 保护文件 |
+| `product-detail` / `product-plan` / `product-apply` / `product-restore` | Python TCP 读取、短 JSON 改价计划、一次提交与还原；实账户商品读写待验证 |
+| `collected-product-get` / `collected-product-edit` | 读本地采集商品快照，预览并保存英文文案和指定变体的加价 |
+| `erp-product-get` | 从本地商品表按产品编号或父 SKU 选取商品和变体 |
+| `erp-draft-preview` | 预填包装毛重和尺寸，批量试算变体加价并保存审阅稿 |
+| `listing-copy-check` | 检查美国站五个英文字段、排除指定品牌和原厂暗示，可返回智赢英文栏位 |
+| `traffic-summary` | 读取本地销售流量报告，按 ASIN/SKU 筛选、按指标排序或查看日期汇总 |
+| `listing-get` | 按 SKU 读取刊登状态、卖家报价、可售量和刊登问题 |
+| `listing-preview` | 将草稿交给 Amazon 预检，返回刊登问题 |
+| `fba-inventory` | 按 SKU 查看 FBA 可配送、在途和预留数量 |
+| `report-create` / `report-status` / `report-summary` | 申请报告、查询生成状态、在内存下载并汇总 |
 
-商品读取、变体加价和介绍的计划/提交/还原代码已实现。2026-11-26 的实机只读请求收到身份标识匹配的 TCP 响应，但服务器返回 `-9` 和同账户登录相关提示，没有返回商品记录；该提示的原因仍待确认。商品读取成功、服务端最小更新参数及保存/还原尚未通过实机验证，不能称为生产改价已接通。
-
-上品、在线报告下载、自动补货/止损和广告预算调整尚未实现。窗口激活成功只证明可以控制窗口前台状态。
-
-## 使用
-
-需要 Python 3.9+。窗口及报告命令使用标准库；原生会话导出还需要 PowerShell 7 和显式提供的 Microsoft ClrMD 依赖。GZip 响应使用标准库，Brotli 响应需要可选的 `brotli` 包。当前会话导出只支持已核对的 Windows 客户端程序集布局。
+## 本地使用
 
 ```powershell
 python scripts/zhiying.py status
-python scripts/zhiying.py window-status
-python scripts/zhiying.py window-focus
 python scripts/zhiying.py routes --match amazon --limit 5
-python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --limit 2
+python scripts/zhiying.py erp-product-get --file examples/erp-products.csv --product-id DEMO-1001
+python scripts/zhiying.py erp-draft-preview --file examples/erp-products.csv --product-id DEMO-1001 --add-amount 3.25 --currency CNY
+python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --sku DEMO-002 --limit 1
+python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --by date --limit 2
 ```
 
-原生接口的依赖、JSON 指令和完整命令见 [原生商品 CLI](references/native-cli.md)。`product-detail` 必须明确选择 `sale`（产品列表）或 `spider`（采集列表）。会话及完整商品计划保存在本地 `work/` 或 `*.local.json`，不要提交这些文件。
+示例使用合成数据。实际报告可放在 Git 忽略的 `reports/` 目录。以关键词 `--help` 查看每条命令的参数。默认优先使用 `%LOCALAPPDATA%\Programs\ZYing\ZYing.exe`，不存在时检查 `D:\ZYing\ZYing.exe`，扩展路径为 `%LOCALAPPDATA%\ZYing\zying-ext.crx`。可在子命令前使用 `--app` 和 `--extension` 指定其他路径。`launch` 返回的是初次观察到的进程状态。
 
-示例报告是人工生成的测试数据，不是卖家账号数据。业务报告放在被忽略的 `reports/` 目录，例如：
+商品表支持 CSV、TSV、JSON 和 XLSX。采集商品 JSON 可按变体键更新加价、更新英文介绍并保存到新文件。列名、单位和定价规则见 [ERP 商品预览](references/erp-products.md)。内置 TCP 执行器已通过当前安装版的组件和回环发包核验，需要 PowerShell 7、.NET 6 Desktop Runtime 和正常登录会话。实账户读写仍待验证。见 [采集商品接口记录](references/collected-product-api.md)。
 
-```powershell
-python scripts/zhiying.py traffic-summary --file reports/sales-traffic.json --limit 10
-```
+另一套 Python TCP 命令使用 `session-export` 的 DPAPI 文件，支持明确选择产品列表 `sale` 或采集列表 `spider`，并保存改动计划、竞争检查及还原原值。会话文件格式与 C# 执行器的 `ZHIYING_SESSION_FILE` 不同，不可直接混用。用法与已知限制见 [原生商品 CLI](references/native-cli.md)。2026-11-26 已收到身份匹配的服务器错误响应 `-9`，尚未成功取得商品记录或执行保存；不能把该响应当成改价完成。
 
-默认程序路径为 `D:\ZYing\ZYing.exe`，扩展路径为 `%LOCALAPPDATA%\ZYing\zying-ext.crx`。路径参数放在子命令前：
+商品介绍缺失时，按 [Amazon.com 文案流程](references/listing-workflow.md) 先核验并生成缺失内容，再用 `listing-copy-check` 检查。主图、场景图、细节图和尺寸图的制作边界见 [商品图片](references/listing-images.md)。
 
-```powershell
-python scripts/zhiying.py --app 'E:\ZYing\ZYing.exe' --extension 'E:\extensions\zying-ext.crx' status
-python scripts/zhiying.py --app 'G:\ZYing\ZYing.exe' window-focus
-```
+## Amazon 联机使用
 
-`launch` 只启动已有程序，不传入猜测的 `--help` 或调试参数。进程出现不代表登录和完整启动成功。初次实机测试观察到短暂进程，后续已退出，持续启动原因仍未验证。
+在线命令需要已获授权的 SP-API 应用和对应权限。`listing-preview` 固定使用 `VALIDATION_PREVIEW`；`report-create` 会向 Amazon 新建报告请求。配置、示例和结果解释见 [SP-API 操作说明](references/sp-api.md)。
 
-2026-11-25 已对一个运行中的智赢客户端实测窗口查找和激活：返回 `foreground=true`、`window_responding=true`，没有发送商品请求。`window-focus` 使用现有窗口，不另开一份客户端。窗口标题也不能证明账号权限或登录的是哪一种业务入口。
-
-如果 `window-status` 返回多个窗口，使用返回的整数句柄指定目标；`--window` 放在子命令后：
-
-```powershell
-python scripts/zhiying.py --app 'G:\ZYing\ZYing.exe' window-focus --window 123456
-```
+Sales and Traffic 覆盖整体页面流量。净利润和止损需要另有成本、费用、物流、退款和阈值。更多背景见 [亚马逊运营参考](references/amazon-organic.md)。
 
 ## 在 Codex 复用
 
-把这个仓库作为一个技能文件夹放到你的 Codex skills 目录，或在对话中指定本仓库的 `SKILL.md`。入口以脚本命令为主，按需读取 `references/amazon-organic.md`、`references/interfaces.md`、`references/native-cli.md` 或 `references/collected-product-api.md`，避免每轮重复扫描客户端或完整输出页面。
-
-采集商品字段与调用边界见 [采集商品接口核验](references/collected-product-api.md)：`money` 是变体加价，`sale_cost` 是成本单价，`sale_price` 是分销单价。扩展的新采集 HTTP 接口不能直接代替桌面的现有商品更新命令。
-
-Sales and Traffic 报告覆盖整体页面流量，不直接区分自然与广告归因。`unitSessionPercentage` 也不等于订单/session。止损需要成本、平台费用、物流和退款等信息，不能从销售额直接推算净利润。
-
-后续优先验证 SP-API 商品类型校验/刊登草稿、报告下载以及价格库存读取；再加入明确规则的放量、补货和止损建议。真正执行业务写入前，需要已授权账户和具体变更。
+将 `zhiying-cli` 文件夹放在 Codex 的技能搜索目录，或在对话里指定 [SKILL.md](SKILL.md)。入口只列常用命令。接口和业务资料按需读取。
 
 ## 验证
 
@@ -75,8 +55,6 @@ Sales and Traffic 报告覆盖整体页面流量，不直接区分自然与广�
 python -m unittest discover -s tests
 ```
 
-测试覆盖 CRX 解析、报告摘要、窗口激活、原生 TCP/Record 编码、精确 Decimal、完整变体和多语言保留、竞争改动检测，以及丢失响应后的计划状态。协议测试使用本地构造的响应，不能替代真实商品读取和保存验证。另有实机窗口激活、受保护会话导出及服务器错误响应证据；没有执行商品保存或店铺改价。
+测试覆盖本地扩展解析、商品选择、包装和价格预览、报告处理，以及模拟 HTTP 响应下的刊登、库存和报告流程。XLSX 测试在已安装 `openpyxl` 的环境运行。真实卖家账户联机验证需要已授权的 SP-API 应用。
 
-## 官方参考
-
-详见 `references/sources.json`。Amazon 官方 Selling Partner skill/connector 与官方 SP-API SDK可作为后续接入候选；本仓库不假定 Codex 已具备 Amazon connector，也不包含账号令牌。
+Python 原生流程另有 RecordSet/Decimal 线编码、响应分片、DPAPI 文件、完整变体保留、写入结果不明时禁止重放，以及同一计划并发执行拒绝的离线测试。测试通过不替代服务端商品读写与还原验证。

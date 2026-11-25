@@ -1,27 +1,19 @@
 ---
 name: zhiying-cli
-description: Use compact commands to inspect 智赢跨境, activate its Windows client, debug native product reads and variant surcharge plans, or summarize Amazon reports. Native writes require a validated session and an explicit product change.
+description: Check 智赢跨境 prices, edit collected-product copy and variant surcharges, and draft Amazon.com listings and images.
 ---
 
-Use `scripts/zhiying.py` with the available Python runtime. It returns compact JSON. Native session export requires PowerShell 7 and supplied Microsoft ClrMD dependencies; Brotli responses need the optional `brotli` package.
+Run `scripts/zhiying.py` with Python 3.9+ and use `<command> --help` for flags. Return only the fields and rows needed.
 
-Commands:
-- `status`: installed executable, running processes, app-owned listening ports, extension version.
-- `launch`: start the existing executable, or report that it is already running.
-- `window-status`: find existing windows belonging to the selected executable and report foreground state.
-- `window-focus`: activate one existing client window and verify its response and foreground state.
-- `routes --match amazon --limit 10`: inspect extension route definitions without HTTP requests.
-- `traffic-summary --file report.json --limit 10`: summarize a supplied Sales and Traffic JSON report.
-- Native product commands: `session-export`, `product-detail`, `product-plan`, `product-apply`, `product-restore`. Read [references/native-cli.md](references/native-cli.md) before using them.
+Use authorized CLI transports for live product operations and explicit local files for offline work. Keep screenshots read-only. Desktop diagnostics are independent of product editing.
 
-Default installation: `D:\ZYing`; extension: `%LOCALAPPDATA%\ZYing\zying-ext.crx`. Override with `--app` or `--extension` before the subcommand.
+- Use `status`, `launch`, or `routes` for client diagnostics. On explicit request for a window check or activation, use `window-status` or `window-focus`. See [interfaces.md](references/interfaces.md).
+- Run `collected-transport-probe` to check native component loading and request encoding. For live reads and writes, use `collected-product-live-get` and `collected-product-live-edit`. The built-in TCP transport uses the installed client DLLs and `ZHIYING_SESSION_FILE`. Use `--include-copy` to read available English copy and `--copy-file` to change selected fields. Report the exact missing session or transport. A manual desktop login still needs a verified session handoff. Verify writes by reading through that transport. See [collected-product-api.md](references/collected-product-api.md).
+- For the Python TCP path, use `session-export` with an explicit diagnostics directory, then `product-detail`, `product-plan`, `product-apply`, and `product-restore`. Its DPAPI session file is separate from `ZHIYING_SESSION_FILE`. Read [native-cli.md](references/native-cli.md) for the short JSON instruction and supported client layout. Require the actual namespace (`sale` for product list, `spider` for collection list); keep variant `money`, cost `sale_cost`, and distribution price `sale_price` distinct. This path has received a server error response, but successful product reads/writes remain unverified. A saved plan is submitted once and locked against concurrent use; inspect an uncertain result before restoring or replanning.
+- Use `collected-product-get` and `collected-product-edit` for supplied local JSON snapshots. Read [erp-products.md](references/erp-products.md) for English introduction, per-variant `money` and .49/.89/.99 channel quotes.
+- For local ERP product tables, use `erp-product-get` to select by product number and `erp-draft-preview` to review package fields and variant prices. Read [erp-products.md](references/erp-products.md) for columns and rules.
+- For Amazon.com copy, including missing ERP descriptions, read [listing-workflow.md](references/listing-workflow.md). Validate the five copy fields with `listing-copy-check`. For product images, read [listing-images.md](references/listing-images.md).
+- A downloaded Sales and Traffic JSON uses `traffic-summary --file report.json`. Filter by `--asin` or `--sku`, or use `--by date` for the report's date aggregates.
+- Online Amazon operations use `listing-get`, `listing-preview`, `fba-inventory`, `report-create`, `report-status`, or `report-summary`. Read [sp-api.md](references/sp-api.md) for credentials, roles and examples. Preview validates a draft without publishing. Create a report only when asked to request new data.
 
-If multiple windows match, choose a handle from `window-status` with `window-focus --window <integer handle>`; this option follows the subcommand.
-
-The executable is a WinForms/CefSharp client. Its first argument is an internal startup identifier; do not pass arbitrary CLI flags. HTTP commands exist, but authentication and signing are required. Route discovery does not establish payload schemas or read-only behavior.
-
-Window activation does not establish product permissions. Native product code is implemented, but the live detail request returned server error `-9`; successful product retrieval and saves remain unverified. Choose `sale` for the product list and `spider` for the collection list. Keep `money` (variant surcharge), `sale_cost` (cost), `sale_price` (distribution price), and final platform price distinct. Title is `sale_title`; description is `sale_intro`, both language JSON string columns. Read [references/collected-product-api.md](references/collected-product-api.md) for encoding evidence.
-
-Keep session files and full product plans local. Apply only the specific change authorized in chat. A `write_attempted` plan may have reached the server; inspect or restore it instead of replaying. Preserve other variants and languages. Re-export the session after normal client login changes.
-
-For Amazon workflows, read [references/amazon-organic.md](references/amazon-organic.md); use [references/interfaces.md](references/interfaces.md) for app details. Sales/Traffic reports measure all page traffic; revenue is not net profit. Business writes and stop-loss decisions need verified permissions, costs and user rules. Return only needed fields and bounded rows.
+For traffic interpretation or connector research, read [amazon-organic.md](references/amazon-organic.md). Sales and Traffic covers all page traffic. Profit and stop-loss decisions require costs, fees and the seller's thresholds.

@@ -1,14 +1,24 @@
 from copy import deepcopy
+from decimal import Decimal
+from contextlib import redirect_stdout, redirect_stderr
+import importlib.util
+import io
 from pathlib import Path
 import sys
 import tempfile
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import product_cli
 from product_model import ProductDataError, decode_json
+
+CLI_PATH = Path(__file__).resolve().parents[1] / 'scripts' / 'zhiying.py'
+CLI_SPEC = importlib.util.spec_from_file_location('native_cli_test_entry', CLI_PATH)
+cli = importlib.util.module_from_spec(CLI_SPEC)
+CLI_SPEC.loader.exec_module(cli)
 
 
 class FakeClient:
@@ -110,6 +120,25 @@ class ProductCliTests(unittest.TestCase):
                 release.set()
             self.assertTrue(first.result()['ok'])
         self.assertEqual(len(self.client.writes), 1)
+
+    def test_native_cli_serializes_decimal_results_without_losing_precision(self):
+        output = io.StringIO()
+        arguments = ['zhiying.py', 'product-detail', '--session', 'session.local.json',
+                     '--namespace', 'sale', '--id', '951393413']
+        result = {'ok': True, 'cost': Decimal('7.01')}
+        with patch.object(sys, 'argv', arguments), patch.object(product_cli, 'run', return_value=result), \
+                redirect_stdout(output):
+            code = cli.main()
+        self.assertEqual(code, 0)
+        self.assertEqual(decode_json(output.getvalue())['cost'], Decimal('7.01'))
+
+    def test_session_export_requires_the_diagnostics_directory(self):
+        output = io.StringIO()
+        arguments = ['zhiying.py', 'session-export', '--output', 'session.local.json']
+        with patch.object(sys, 'argv', arguments), redirect_stdout(output), \
+                redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as exit_status:
+            cli.main()
+        self.assertEqual(exit_status.exception.code, 2)
 
 
 if __name__ == '__main__':
