@@ -1,4 +1,4 @@
-# Verified interface notes, 2026-11-25
+# Verified interface notes, 2026-11-26
 
 The installed application is 智赢跨境. The earlier chat called it 智慧跨境. The first inspected shortcut targeted `D:\ZYing\ZYing.exe` with working directory `D:\ZYing` and no arguments. A later running installation used `G:\ZYing\ZYing.exe`; use the configurable `--app` path. The application is .NET 6 WinForms with CefSharp, not an Electron app.
 
@@ -11,6 +11,14 @@ Static metadata and method-body inspection found `ZYing.Program.Main` calling `Z
 `window-status` finds visible top-level windows owned by the selected executable. `window-focus` activates an existing window with Windows APIs and verifies the foreground handle. Cross-thread activation is asynchronous, so a harmless `WM_NULL` message synchronizes with the target, followed by a bounded observation of foreground completion. Activation is issued once.
 
 On 2026-11-25, an existing client window was successfully activated and returned `foreground=true` and `window_responding=true`. This does not verify login permissions or product calls, and it does not establish a CDP or application-specific control endpoint. The existing `launch` command's earlier startup observations remain separate from this activation check.
+
+## Native product CLI
+
+The CLI now implements protected session export, native detail reads, fixed JSON mutation plans, one-time submission, and restoration. Read [native-cli.md](native-cli.md) for dependency setup and commands. Product-list records use `sale.detail/update`; collection-list records use `spider.detail/update`.
+
+Session export attaches read-only with Microsoft ClrMD (`suspend:false`) to a matching local client and reads only the selected protocol/session fields. The output is protected with Windows DPAPI and never prints session GUIDs. The exporter checks the exact verified `ZYing.Work.dll` hash; a different assembly layout needs new evidence.
+
+On 2026-11-26, a native read returned a correctly framed `c` response with matching identifiers and server result `-9`, with an account-login-related message and no product records. This verifies server communication and error decoding, not successful authentication, product retrieval, or writes. Concurrent use is reportedly supported, so the error's root cause remains unconfirmed. No product write or restore was performed.
 
 ## HTTP commands
 
@@ -30,7 +38,7 @@ The subsequent 5.2.4 extension inspection established that `common.getPluginOrde
 
 The 5.2.4 registered actions and dynamic-command whitelist did not expose `spider.detail` or `spider.update`. The confirmed desktop collected-product chain uses private TCP binary RPC. See [collected-product-api.md](collected-product-api.md) for exact field meanings, encoding and the remaining invocation boundary.
 
-These are client-internal endpoints, not a confirmed public integration API. No credentials, cookies, business databases or authenticated API responses were read. The supplied script inspects source definitions and never sends a business API request.
+These HTTP endpoints are client-internal definitions, not a confirmed public integration API. The `routes` command only inspects source definitions and sends no business request. The separate native product commands do send explicit TCP requests using a protected local session.
 
 For actual business automation, first verify one intended operation and its payload/response through the application's legitimate authenticated client. Prefer a supported API where available. A browser session can preserve its normal request signing without exposing a token to the model. Build one deterministic command per verified operation and cap both fields and rows in its response. Do not invent a generic POST wrapper that assumes unsigned requests work.
 

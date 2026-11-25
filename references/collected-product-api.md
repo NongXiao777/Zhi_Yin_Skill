@@ -1,8 +1,8 @@
-# 采集商品接口静态核验
+# 商品接口与编码核验
 
 核验日期：2026-11-25。通过 IDA Pro MCP 和离线 .NET 元数据/IL 分析，检查了 `ZYing.User.dll`、`ZYing.Work.dll`、`ZYing.Core.dll`、`ZYing.UI.dll` 及智赢扩展 5.2.4。不同安装版本的混淆地址不能混用；此处仅保存脱敏的调用和参数结论，不附程序集、账号数据或解码资源。
 
-**商品读取与写入尚未在本 CLI 实现。** 以下是客户端静态证据，未执行正常会话下的商品请求、保存或读回验证。
+原生读取、改价计划、提交和还原代码已实现，命令见 [native-cli.md](native-cli.md)。2026-11-26 实机读取收到会话标识匹配的响应，但结果为服务器错误 `-9`，没有商品记录。以下字段主要来自客户端静态证据；商品成功读取、保存和还原仍未通过实机验证。
 
 ## 已有采集商品详情
 
@@ -26,6 +26,8 @@ ZYing.User.dll
 
 `id` 是 `Int32` 产品编号；客户端从 `Control.Name` 经 `Valid.ToInt` 取得。`PostAsync` 是内部方法名，底层 `TcpClient.ConnectAsync`、`GetStream`、`Stream.WriteAsync` 和 `ReadAsync` 发送二进制数据，不能理解为 HTTP POST。
 
+“产品列表”使用同一详情控件的 `sale` 目标，对应 `sale.detail/update`；“采集列表”目标为 `spider`，对应 `spider.detail/update`。CLI 的 `--namespace` 必须明确指定，不能按产品编号猜记录所在列表。
+
 请求还需要正常登录会话、客户端标识与外层协议编码。命令名和参数名本身不构成可直接调用的公共 API。
 
 ## 字段与编码
@@ -33,6 +35,7 @@ ZYing.User.dll
 | 内容 | 字段 | 已确认语义 |
 |---|---|---|
 | 商品编号 | `sale_id` | 商品记录编号；详情查询参数名为 `id` |
+| 商品标题 | `sale_title` | 多语言 JSON 对象的字符串列；`Sale.GetTitle("en")` 读取英文标题 |
 | 商品描述 | `sale_intro` | 包含多语言 JSON 对象的字符串列；英文语言码为 `en` |
 | 包装毛重 | `sale_weight` | `Int32`，克 |
 | 包装尺寸 | `sale_size` | 长、宽、高，厘米；UI 保存为逗号分隔字符串 |
@@ -103,6 +106,10 @@ Core 编码层能构造少量列，例如 `id(Int32)` 加 `sale_stock(String)` �
 
 签名输入包含 `JSON.stringify(data)`、大写 HTTP 方法、路径及查询、秒时间戳和正常会话 token。请求 headers 包含 `token/appclient/timestamp/signature/version/client_identify/ext_version`；实际传输使用 `appclient=3`、`version=v1.1`。密钥和会话值不应进入模型上下文或仓库。
 
-## 后续执行器
+## 已实现执行器及验证边界
 
-将 AI 操作明确命名为 `set_variant_surcharge`。固定程序承担详情读取、目标定位、合并、保存和读回，AI 只需传递产品编号、变体键和新加价。当前缺少有效会话传输、服务端更新范围及真实读回证据，不应提供一个猜测的通用 POST 命令或声称已能生产改价。
+`product-plan` 接收 `operation=update_product` 的固定 JSON 指令，允许变体 `new_money` 和介绍追加字符。`product_model.py` 负责唯一定位变体、Decimal 运算、保留其他数据、生成还原值和竞争改动指纹；`product_cli.py` 负责读取、计划、一次提交及读回。原生 `NativeClient` 通过已核对的 TCP 编码调用命令，不提供任意命令转发器。
+
+当前支持普通 `M` 模式：请求为模式字节和小端长度，响应为 `c`、属性数量、小端长度及正文。正文包含协议版本、两个会话 GUID、结果、错误标识、消息、可选属性和 RecordSet。GZip/Brotli 包装及 Decimal、字符串、数值数组有编码测试；`w` 进度帧和未实现的类型会明确失败。
+
+实机错误响应提示“同一账户出现多次登录，请及时修改密码”。重新导出的会话字段未变化，不能把错误简单归因于旧导出文件；账号支持多端使用的反馈也不证明此请求已认证成功。错误提示原因、服务端最小更新参数和真实保存仍待验证。本轮没有写入商品。

@@ -4,5 +4,7 @@ __pycache__/
 .env
 .env.*
 *.local.json
+*.local.json.tmp
+*.local.json.lock
 reports/
 work/

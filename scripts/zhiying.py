@@ -171,6 +171,8 @@ def main():
     report_parser = commands.add_parser('traffic-summary')
     report_parser.add_argument('--file', type=Path, required=True)
     report_parser.add_argument('--limit', type=int, choices=range(1, 51), default=10, metavar='1..50')
+    import product_cli
+    product_cli.add_commands(commands)
     args = parser.parse_args()
     args.app = args.app.resolve()
     args.extension = args.extension.resolve()
@@ -187,11 +189,28 @@ def main():
         elif args.action == 'window-focus':
             from window_control import window_focus
             result = window_focus(args.app, args.window)
+        elif args.action.startswith('product-') or args.action == 'session-export':
+            result = product_cli.run(args)
         else:
             result = traffic_summary(args.file.resolve(), args.limit)
         emit(result)
         return 1 if result.get('ok') is False else 0
-    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired, zipfile.BadZipFile, KeyError):
+    except product_cli.ProductDataError as error:
+        emit({'ok': False, 'error_type': 'product_data', 'error': str(error)})
+        return 1
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired, zipfile.BadZipFile, KeyError) as error:
+        if args.action.startswith('product-') or args.action == 'session-export':
+            from zying_session import SessionError
+            from zying_transport import ProtocolError, ServerError
+            if isinstance(error, ServerError):
+                emit({'ok': False, 'error_type': 'server', 'result': error.result,
+                      'error': str(error)})
+            elif isinstance(error, (ProtocolError, SessionError)):
+                emit({'ok': False, 'error_type': type(error).__name__, 'error': str(error)})
+            else:
+                emit({'ok': False, 'error_type': 'io',
+                      'error': 'Product operation could not complete; inspect the saved plan before replaying'})
+            return 1
         emit({'ok': False, 'error': 'Probe failed; verify the installation, package path and Windows process access'})
         return 1
 
