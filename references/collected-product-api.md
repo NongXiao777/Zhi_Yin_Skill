@@ -1,4 +1,4 @@
-# 采集商品接口静态核验
+# 采集商品接口与原生 TCP 执行器
 
 核验日期：2026-11-25。通过 IDA Pro MCP 和离线 .NET 元数据/IL 分析，检查了 `ZYing.User.dll`、`ZYing.Work.dll`、`ZYing.Core.dll`、`ZYing.UI.dll` 及智赢扩展 5.2.4。用户补充的脱敏分析所列 DLL 与当前安装版哈希不同。按安装版本核对混淆符号和字段映射。
 
@@ -6,7 +6,19 @@
 
 ## 命令行接入
 
-CLI 的真实商品命令需要已经获授权的 TCP 执行器。通过 `--transport` 传可执行文件路径，或在本机设置 `ZHIYING_COLLECTED_TRANSPORT`。本项目目前只有执行器契约，真实会话和智赢 TCP 传输由执行器负责。可先人工登录，再通过智赢允许的接入方式把正常授权会话交给执行器。
+内置执行器位于 `scripts/native/NativeTransport.cs`。它通过反射复用本机 `ZYing.Work.dll` 的 TCP 请求和响应代码，以及 `ZYing.Core.dll` 的 Record 编码。PowerShell 7 使用自身的 Roslyn 编译器将它编译到临时目录，再由已安装的 .NET 6 Windows Desktop Runtime 运行。`--app` 选择实际安装路径。
+
+```powershell
+python scripts/zhiying.py collected-transport-probe
+```
+
+该命令创建合成会话，验证原生组件加载和请求编码，返回 `network_requests_sent: 0`。原生回环测试还验证了五字节 TCP 包头和后续请求体，实际捕获了 `spider.detail` 和测试编号。真实记录仍需正常有效的登录会话。
+
+会话由本地 `ZHIYING_SESSION_FILE` 指向的 JSON 提供，文件路径可使用 Git 已忽略的 `*.local.json`。字段为实际 `server_address`（IP）、`server_port`（整数）、`token`（正常登录取得的 GUID），以及可选的实际 `user_id`。凭据由执行器在本地读取。人工登录后的 `ZYing.Member.Token` 位于客户端进程内，目前未确认自动生成会话文件，导出入口仍待核实。
+
+也可通过 `--transport` 指定另一个执行器，或设置 `ZHIYING_COLLECTED_TRANSPORT`。它遵循下方进程间契约。
+
+当前版本的登录状态机发送 `common.login`，使用 `login_acc` 和 `login_pwd` 等表单列。代码中还有密码编码、数字登录号和强制改密码分支，完整登录请求仍待核对。`ZYing.Member.Parse(Record)` 负责写入会话 `Token`，它由 `ZYing.MPush.Deal` 调用。这些是登录流程定位，实账户的登录和会话交接仍待验证。
 
 ```powershell
 python scripts/zhiying.py collected-product-live-get --product-id 954521907 --include-copy
@@ -21,9 +33,11 @@ python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --c
 | `{"command":"spider.detail","id":954521907}` | `{"ok":true,"record":{...}}`。返回同一 `sale_id` 及现有语言和完整变体集合 |
 | `{"command":"spider.update","id":954521907,"expected":{...},"fields":{...}}` | 校验 `expected` 中将要更改的字段基线，只保存 `fields` 中的字段。成功返回 `{"ok":true}`，冲突返回 `{"ok":false,"error":"conflict"}` |
 
-上表是进程间契约。TCP 编码、认证方式和服务端认可的更新范围仍需在实际执行器上验证。CLI 更新后会再次调用 `spider.detail`，逐个对比提交字段，只有匹配时才返回 `remote_read_back_verified: true`。若保存结果不明或读回失败，先重新读取现状。
+上表定义 CLI 到执行器的请求。内置执行器已调用当前客户端编码器，并在保存前重新读取对比基线。服务端对会话和最小更新范围的接受情况仍待实账户核验。服务端原子条件更新能力未知，并发写入时应协调编辑时段。CLI 更新后会再次调用 `spider.detail`，逐个对比提交字段，只有匹配时才返回 `remote_read_back_verified: true`。若保存结果不明或读回失败，先重新读取现状。
 
-执行器可以在读回的 `record.listing_copy` 下提供已核实的标题、短标题、要点和关键词语言映射。已支持但没有值的字段返回空对象。CLI 只向执行器提交它已暴露的文案字段。该映射属于 CLI 契约，具体原生字段由执行器核实并转换。`sale_en` 保留报关英文简称用途。示例见 [修改标题与其他文案](erp-products.md#修改标题与其他文案)。
+当前安装版的五个原生字段已通过独立加载 User 程序集、求值 `GetTitle/GetBrief/GetKeys/GetBullet/GetIntro` 的字符串参数核实。CLI 直接读取并更新原字段，保留其他语言。兼容已有执行器返回的 `listing_copy` 映射。`sale_en` 保留报关英文简称用途。示例见 [修改标题与其他文案](erp-products.md#修改标题与其他文案)。
+
+内置执行器按已核实的 Work 程序集 SHA256 匹配当前混淆符号。版本变化会返回 `unsupported_client_version`，需重新核对符号再更新。当前类型为 `ze53.Fe5b`，命令字段 `tei4`，详情方法 `lenP(string,int)`，记录提交方法 `Ren4(Record[])`。这些符号只适用于已匹配版本。
 
 ## 已有采集商品详情
 
@@ -54,6 +68,10 @@ ZYing.User.dll
 | 内容 | 字段 | 已确认语义 |
 |---|---|---|
 | 商品编号 | `sale_id` | 商品记录编号；详情查询参数名为 `id` |
+| 商品标题 | `sale_title` | 多语言 JSON 字符串 |
+| 短标题 | `sale_brief` | 多语言 JSON 字符串 |
+| 要点说明 | `sale_bullet` | 多语言 JSON 字符串，英文按换行组织 |
+| 关键词 | `sale_keys` | 多语言 JSON 字符串 |
 | 商品描述 | `sale_intro` | 包含多语言 JSON 对象的字符串列；英文语言码为 `en` |
 | 包装毛重 | `sale_weight` | `Int32`，克 |
 | 包装尺寸 | `sale_size` | 长、宽、高，厘米；UI 保存为逗号分隔字符串 |
@@ -126,4 +144,4 @@ Core 编码层能构造少量列，例如 `id(Int32)` 加 `sale_stock(String)` �
 
 ## 真实接口验收
 
-取得受支持的接入方式后，先读实账户里的采集商品并核对编号、币种、变体键、原加价和英文介绍。按授权范围验证更新范围和可能的状态变化。以一次只改目标字段的保存开始，重新查询确认值和其他语言、变体，再按原值恢复并重新读回。自动化测试覆盖本地快照和执行器契约。真实验收以授权 TCP 执行器返回的商品和保存后读回为准。
+取得受支持的接入方式后，先读实账户里的采集商品并核对编号、币种、变体键、原加价和英文介绍。按授权范围验证更新范围和可能的状态变化。以一次只改目标字段的保存开始，重新查询确认值和其他语言、变体，再按原值恢复并重新读回。自动化测试覆盖本地快照、执行器契约和当前安装版的原生加载及回环发包。真实验收以授权 TCP 执行器返回的商品和保存后读回为准。

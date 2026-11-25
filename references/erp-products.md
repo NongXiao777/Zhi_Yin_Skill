@@ -32,7 +32,7 @@ python scripts/zhiying.py collected-product-edit --file product.json --product-i
 {"product_title":"Compact DC Worm Gear Motor","product_description":"A compact gear motor with reversible rotation."}
 ```
 
-`product_description` 更新 `sale_intro` 的 `en`。其他字段以 `listing_copy` 下的语言映射保存，例如 `"listing_copy":{"product_title":{"en":"Current title","zh":"中文标题"}}`。CLI 保留其他语言和未指定的字段。详情字段映射由 [授权 TCP 执行器](collected-product-api.md) 验证。
+`product_description` 更新 `sale_intro` 的 `en`。其他字段对应 `sale_title`、`sale_brief`、`sale_bullet`、`sale_keys`，各自保存多语言 JSON 字符串。CLI 保留其他语言和未指定的字段，也兼容旧执行器的 `listing_copy` 映射。原生字段的核验过程见 [TCP 执行器](collected-product-api.md)。
 
 ## 选择商品
 

@@ -2,24 +2,51 @@
 from copy import deepcopy
 from pathlib import Path
 import os
+import shutil
 import subprocess
 
-from collected_products import collection, decode_json, encode_json, product_number, record_result
+from collected_products import NATIVE_COPY_FIELDS, collection, decode_json, encode_json, product_number, record_result
 from erp_products import FILE_LIMIT, ProductError
 
 
 TRANSPORT_ENV = 'ZHIYING_COLLECTED_TRANSPORT'
+SESSION_ENV = 'ZHIYING_SESSION_FILE'
 EDIT_FIELDS = {'sale_intro': dict, 'sale_stock': list, 'listing_copy': dict}
+EDIT_FIELDS.update({field: dict for field in NATIVE_COPY_FIELDS.values()})
 
 
 class TransportConflict(ProductError):
     pass
 
 
+def native_command(app):
+    shell = shutil.which('pwsh')
+    if shell is None:
+        raise ProductError('The native transport needs PowerShell 7 and the installed .NET 6 Desktop Runtime')
+    build = Path(__file__).parent / 'native' / 'Build.ps1'
+    try:
+        completed = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-File', str(build),
+                                    '-AppDirectory', str(app.parent)], capture_output=True, timeout=30)
+        result = decode_json(completed.stdout.decode('utf-8-sig'))
+        if completed.returncode or result.get('ok') is not True:
+            raise ValueError('Build failed')
+        return [result['executable'], result['assembly'], result['app_directory']]
+    except (OSError, ValueError, KeyError, AttributeError, subprocess.TimeoutExpired):
+        raise ProductError('Could not build the native transport. Verify PowerShell 7 and .NET 6 Desktop Runtime.') from None
+
+
+def native_probe(app):
+    response = request(native_command(app), {'command': 'native.probe'})
+    return {**response, 'mode': 'native_component_probe', 'real_product_verified': False}
+
+
 def transport_command(args):
     selected = args.transport or os.environ.get(TRANSPORT_ENV)
     if not selected:
-        raise ProductError(f'Live TCP transport is not configured. Set {TRANSPORT_ENV} or pass --transport.')
+        if os.environ.get(SESSION_ENV):
+            return native_command(args.app)
+        raise ProductError(f'Live TCP transport is not configured. Set {SESSION_ENV} for the native transport, '
+                           f'or {TRANSPORT_ENV} or --transport for another authorized transport.')
     executable = Path(selected).expanduser().resolve()
     if not executable.is_file() or executable.suffix.lower() in ('.bat', '.cmd'):
         raise ProductError('Specify an existing transport executable. For a script, pass its interpreter and --transport-arg.')
@@ -30,14 +57,24 @@ def request(transport, payload):
     # Credentials belong to the configured transport. Its raw stdout and stderr stay out of CLI output.
     try:
         proc = subprocess.run(transport, input=encode_json(payload).encode('utf-8'), capture_output=True, timeout=30)
-        if proc.returncode or len(proc.stdout) > FILE_LIMIT:
+        if len(proc.stdout) > FILE_LIMIT:
             raise ValueError('Transport subprocess failed')
         response = decode_json(proc.stdout.decode('utf-8-sig'))
+        if proc.returncode and (not isinstance(response, dict) or response.get('ok') is not False):
+            raise ValueError('Transport subprocess failed')
     except (OSError, ValueError, RecursionError, subprocess.TimeoutExpired):
         raise ProductError(f"{payload['command']} did not return a usable transport response") from None
     if not isinstance(response, dict) or response.get('ok') is not True:
         if isinstance(response, dict) and response.get('error') == 'conflict':
             raise TransportConflict('Transport reported an update conflict. Read the current product before retrying.')
+        native_errors = {
+            'missing_session_file': 'The native transport needs a local session file in ZHIYING_SESSION_FILE',
+            'unsupported_client_version': 'The installed client differs from the verified native transport version',
+            'invalid_session_configuration': 'The local session needs the actual server address, port and login token',
+            'server_rejected_request': 'The server rejected the native request. Verify the login session and account permissions',
+        }
+        if isinstance(response, dict) and response.get('error') in native_errors:
+            raise ProductError(native_errors[response['error']])
         raise ProductError(f"{payload['command']} was not acknowledged by the transport")
     return response
 

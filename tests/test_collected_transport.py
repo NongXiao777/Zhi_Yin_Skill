@@ -49,6 +49,7 @@ class CollectedTransportTests(unittest.TestCase):
     def cli(self, action, *options, transport=True, behavior='save', expected=0):
         env = os.environ.copy()
         env.pop('ZHIYING_COLLECTED_TRANSPORT', None)
+        env.pop('ZHIYING_SESSION_FILE', None)
         command = [sys.executable, str(CLI), f'collected-product-live-{action}', '--product-id', '1001']
         if transport:
             command.extend(['--transport', sys.executable,
@@ -114,6 +115,21 @@ class CollectedTransportTests(unittest.TestCase):
         result = self.cli('edit', '--copy-file', self.intro, expected=1)
         self.assertIn('did not expose these listing fields: product_title', result['error'])
         self.assertEqual(len(self.calls()), 1)
+
+    def test_native_copy_fields_are_read_updated_and_verified(self):
+        self.record.update(sale_title='{"en":"Old title","zh":"Keep title"}',
+                           sale_bullet='{"en":"Old bullets"}', sale_en='Customs abbreviation')
+        self.state.write_text(json.dumps(self.record), encoding='utf-8')
+        self.intro.write_text(json.dumps({'product_title': 'Compact DC Motor',
+                                         'bullet_points': ['First point', 'Second point']}), encoding='utf-8')
+        result = self.cli('edit', '--copy-file', self.intro, '--include-copy')
+        self.assertTrue(result['remote_read_back_verified'])
+        self.assertEqual(result['copy_en']['product_title'], 'Compact DC Motor')
+        self.assertEqual(set(self.calls()[1]['fields']), {'sale_title', 'sale_bullet'})
+        saved = json.loads(self.state.read_text(encoding='utf-8'))
+        self.assertEqual(json.loads(saved['sale_title']), {'en': 'Compact DC Motor', 'zh': 'Keep title'})
+        self.assertEqual(json.loads(saved['sale_bullet'])['en'], 'First point\nSecond point')
+        self.assertEqual(saved['sale_en'], 'Customs abbreviation')
 
     def test_conflict_stops_without_another_write(self):
         result = self.cli('edit', '--set-surcharge', 'target', '1.01', behavior='conflict', expected=1)

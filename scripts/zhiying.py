@@ -337,6 +337,7 @@ def main():
     commands = parser.add_subparsers(dest='action', required=True)
     commands.add_parser('status', help='inspect local ZYing installation and processes')
     commands.add_parser('launch', help='start the installed ZYing client')
+    commands.add_parser('collected-transport-probe', help='load native TCP components and encode an offline request')
     commands.add_parser('window-status')
     focus = commands.add_parser('window-focus')
     focus.add_argument('--window', type=int, help='Handle returned by window-status')
@@ -366,6 +367,9 @@ def main():
         elif args.action in WINDOW_COMMANDS:
             from window_control import window_focus, window_status
             result = window_status(args.app) if args.action == 'window-status' else window_focus(args.app, args.window)
+        elif args.action == 'collected-transport-probe':
+            from collected_transport import native_probe
+            result = native_probe(args.app)
         elif args.action in (*COLLECTED_COMMANDS, *LIVE_COLLECTED_COMMANDS):
             from collected_products import collected_result, encode_json
             from collected_transport import live_result
@@ -399,7 +403,7 @@ def main():
         return 1
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired, zipfile.BadZipFile, KeyError,
             TypeError, AttributeError):
-        if args.action in ('status', 'launch', 'routes', *WINDOW_COMMANDS):
+        if args.action in ('status', 'launch', 'routes', 'collected-transport-probe', *WINDOW_COMMANDS):
             message = 'Probe failed. Verify the installation, package path and Windows process access.'
         elif args.action in ('traffic-summary', 'listing-preview', 'erp-product-get', 'erp-draft-preview',
                              'listing-copy-check', *COLLECTED_COMMANDS, *LIVE_COLLECTED_COMMANDS):

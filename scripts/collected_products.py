@@ -12,6 +12,10 @@ INTRO_LIMIT = 250_000
 PRICE_ENDINGS = (Decimal('0.49'), Decimal('0.89'), Decimal('0.99'))
 DESCRIPTION = 'product_description'
 EXTRA_COPY_FIELDS = tuple(field for field in FIELDS if field != DESCRIPTION)
+NATIVE_COPY_FIELDS = {
+    'product_title': 'sale_title', 'product_highlight': 'sale_brief',
+    'bullet_points': 'sale_bullet', 'backend_search_terms': 'sale_keys',
+}
 
 
 def unique_object(pairs):
@@ -149,6 +153,10 @@ def copy_updates(path, blocked_brands):
 
 def copy_locales(record):
     copy = collection(record, 'listing_copy', dict)
+    copy = dict(copy)
+    for field, native in NATIVE_COPY_FIELDS.items():
+        if native in record:
+            copy[field] = collection(record, native, dict)
     for field in EXTRA_COPY_FIELDS:
         if field in copy:
             locales = copy[field]
@@ -253,7 +261,14 @@ def record_result(args, product_id, record, *, edit=False, live=False):
         for field in copy_changes:
             translations.setdefault(field, {})['en'] = updates[field]
         if copy_changes:
-            set_collection(record, 'listing_copy', translations)
+            legacy = collection(record, 'listing_copy', dict)
+            for field in copy_changes:
+                native = NATIVE_COPY_FIELDS[field]
+                if native in record or field not in legacy:
+                    set_collection(record, native, translations[field])
+                else:
+                    legacy[field] = translations[field]
+                    set_collection(record, 'listing_copy', legacy)
         if args.copy_file is not None:
             result['copy_fields_changed'] = copy_changes + ([DESCRIPTION] if result.get('intro_changed') else [])
         if args.minimum_channel_price is not None:
