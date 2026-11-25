@@ -1,10 +1,14 @@
-# Verified interface notes, 2026-11-20
+# Verified interface notes, 2026-11-25
 
-The installed application is 智赢跨境. The earlier chat called it 智慧跨境. The shortcut targets `D:\ZYing\ZYing.exe` with working directory `D:\ZYing` and no arguments. The application is .NET 6 WinForms with CefSharp, not an Electron app.
+The installed application is 智赢跨境. The earlier chat called it 智慧跨境. The on-host client uses `%LOCALAPPDATA%\Programs\ZYing\ZYing.exe` and was observed at normal Windows elevation. Older installations used `D:\ZYing\ZYing.exe`. Use `--app` before the subcommand to select an installation. The application is .NET 6 WinForms with CefSharp, not an Electron app.
 
 ## Native startup
 
 Static metadata and method-body inspection found `ZYing.Program.Main` calling `ZYing.Global.Start`. `Global.Start` reads the process argument array and passes its first extra argument to the startup form, where it flows into an internal token field. An internal overload launches this executable with a GUID argument. A `--BasePath` utility setting exists, but business CLI commands were not established. `Program.ReadLine` reads a supplied stream; a standard-input command loop was not established. Do not guess `--help` or Chromium debug flags on this executable.
+
+## Explicit window diagnostics
+
+`window-status` reports existing visible windows for the selected executable. Use `window-focus` only when the user explicitly asks to activate one, and pass `--window` when multiple handles match. Window commands are independent of login, permissions and collected-product operations.
 
 ## HTTP commands
 
@@ -22,12 +26,12 @@ Path format is `/CmdHandler?cmd=<command>`. The transport serializes `data` with
 
 These client-internal endpoints were identified through static inspection. The `routes` command reads their source definitions locally. The separate Amazon commands use the official [SP-API](sp-api.md).
 
-For actual business automation, first verify one intended operation and its payload/response through the application's legitimate authenticated client. Prefer a supported API where available. A browser session can preserve its normal request signing without exposing a token to the model. Build one deterministic command per verified operation and cap both fields and rows in its response. Do not invent a generic POST wrapper that assumes unsigned requests work.
+Extension 5.2.4 identifies `plugin.detail` as a procurement order operation and exposes collection creation/import routes. The installed 5.2.4 package did not surface the desktop `spider.detail` and `spider.update` commands. The desktop client uses internal binary TCP RPC. See [the collected-product API notes](collected-product-api.md).
 
-## Browser fallback
+For live integration, establish a vendor-supported or otherwise authorized transport, validate one existing-record read, then validate an authorized write by reading it back.
 
-Public unauthenticated GET checks on 2026-11-20 returned HTTP 200 for `https://www.zying.net`, `https://erp.zying.net`, and `https://seller.zying.net`. The latter two expose web app entrypoints with Umi JavaScript bundles, so browser/DOM automation may support web-visible workflows. Equivalence with all desktop ERP functions is unverified.
+## Public web entrypoints
+
+Public unauthenticated GET checks on 2026-11-20 returned HTTP 200 for `https://www.zying.net`, `https://erp.zying.net`, and `https://seller.zying.net`. The latter two expose separate web apps built with Umi JavaScript bundles. Access to the existing desktop collection data remains unverified.
 
 The extension's localhost:1717 HTTP/WebSocket references are inside developer hot-reload code guarded by isDev/false conditions. They are not a production desktop control API. A CefSharp or Chrome/Edge CDP endpoint must be observed before claiming attach support; passing a guessed debugging flag to this executable is insufficient. A no-argument command-line launch was attempted on 2026-11-20; the initial inspection observed ZYing and no app-owned listening port. A later status check found no remaining process under the installation directory. Startup can be requested from the CLI, but a persistent, usable client session was not validated. This does not establish a CDP endpoint after login or after opening an embedded browser.
-
-If browser automation is needed, a short local skill can use Microsoft `@playwright/cli` directly from PowerShell. The OpenAI Playwright skill is the smallest entrypoint among the three candidates inspected. Its bundled Bash wrapper needs adaptation for Windows. Avoid automatically installing unrelated browser skills or loading complete Electron guides for this CefSharp application.

@@ -14,6 +14,8 @@ from pathlib import Path
 
 
 TRAFFIC_SORTS = ('source', 'sessions', 'units_ordered', 'unit_session_percentage')
+COLLECTED_COMMANDS = ('collected-product-get', 'collected-product-edit')
+WINDOW_COMMANDS = ('window-status', 'window-focus')
 
 
 def emit(value):
@@ -234,6 +236,24 @@ def add_erp_commands(commands):
     preview.add_argument('--output', type=Path, help='save the full review as a new JSON file')
 
 
+def add_collected_commands(commands):
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument('--file', type=Path, required=True, help='user-supplied collected-product JSON snapshot')
+    common.add_argument('--product-id', required=True, help='expected sale_id')
+    common.add_argument('--include-intro', action='store_true', help='include the full English introduction')
+    add_limit(common)
+    commands.add_parser(COLLECTED_COMMANDS[0], parents=[common], help='read fields from a collected-product snapshot')
+    edit = commands.add_parser(COLLECTED_COMMANDS[1], parents=[common], help='preview or save a local snapshot edit')
+    edit.add_argument('--set-surcharge', action='append', nargs=2, default=[], metavar=('KEY', 'AMOUNT'),
+                      help='set money for an exact variant key, repeatable')
+    edit.add_argument('--adjust-surcharge', action='append', nargs=2, default=[], metavar=('KEY', 'DELTA'),
+                      help='add a signed delta to money for an exact variant key, repeatable')
+    edit.add_argument('--minimum-channel-price', help='quote a price ending in .49, .89 or .99 at or above this amount')
+    edit.add_argument('--intro-file', type=Path, help='new English introduction as UTF-8 text')
+    edit.add_argument('--blocked-brand', action='append', default=[], help='brand name to exclude, repeatable')
+    edit.add_argument('--output', type=Path, help='save and reread a new local JSON snapshot')
+
+
 def add_sp_api_commands(commands, regions):
     regional = argparse.ArgumentParser(add_help=False)
     regional.add_argument('--region', choices=regions, required=True)
@@ -278,6 +298,15 @@ def sp_api_result(args, sp_api):
     return {**metadata, **{key: value for key, value in summary.items() if value is not None}}
 
 
+def default_app():
+    local = os.environ.get('LOCALAPPDATA')
+    if local:
+        app = Path(local) / 'Programs' / 'ZYing' / 'ZYing.exe'
+        if app.is_file():
+            return app
+    return Path(r'D:\ZYing\ZYing.exe')
+
+
 def main():
     import erp_products
     import listing_copy
@@ -286,12 +315,15 @@ def main():
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--app', type=Path, default=Path(r'D:\ZYing\ZYing.exe'))
+    parser.add_argument('--app', type=Path, default=default_app())
     parser.add_argument('--extension', type=Path,
                         default=Path(os.environ.get('LOCALAPPDATA', '.')) / 'ZYing' / 'zying-ext.crx')
     commands = parser.add_subparsers(dest='action', required=True)
     commands.add_parser('status', help='inspect local ZYing installation and processes')
     commands.add_parser('launch', help='start the installed ZYing client')
+    commands.add_parser('window-status')
+    focus = commands.add_parser('window-focus')
+    focus.add_argument('--window', type=int, help='Handle returned by window-status')
     route_parser = commands.add_parser('routes', help='inspect local extension route definitions')
     route_parser.add_argument('--match', default='')
     add_limit(route_parser)
@@ -299,6 +331,7 @@ def main():
     report_parser.add_argument('--file', type=Path, required=True)
     add_traffic_options(report_parser)
     add_erp_commands(commands)
+    add_collected_commands(commands)
     copy_check = commands.add_parser('listing-copy-check', help='check Amazon.com text and optionally map ERP fields')
     copy_check.add_argument('--file', type=Path, required=True)
     copy_check.add_argument('--blocked-brand', action='append', default=[], help='brand name to exclude, repeatable')
@@ -314,6 +347,14 @@ def main():
             result = launch(args.app, args.extension)
         elif args.action == 'routes':
             result = routes(args.extension, args.match, args.limit)
+        elif args.action in WINDOW_COMMANDS:
+            from window_control import window_focus, window_status
+            result = window_status(args.app) if args.action == 'window-status' else window_focus(args.app, args.window)
+        elif args.action in COLLECTED_COMMANDS:
+            from collected_products import collected_result, encode_json
+            result = collected_result(args, edit=args.action == 'collected-product-edit')
+            print(encode_json(result))
+            return 0
         elif args.action == 'traffic-summary':
             result = traffic_summary(args.file, args.limit, **traffic_options(args))
         elif args.action in ('erp-product-get', 'erp-draft-preview'):
@@ -323,7 +364,8 @@ def main():
         else:
             result = sp_api_result(args, sp_api)
         emit(result)
-        return 1 if args.action == 'listing-copy-check' and not result['copy_checks_pass'] else 0
+        return int(result.get('ok') is False or (
+            args.action == 'listing-copy-check' and not result['copy_checks_pass']))
     except (erp_products.ProductError, listing_copy.ListingCopyError) as error:
         emit({'ok': False, 'error': str(error)})
         return 1
@@ -337,9 +379,10 @@ def main():
         return 1
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired, zipfile.BadZipFile, KeyError,
             TypeError, AttributeError):
-        if args.action in ('status', 'launch', 'routes'):
+        if args.action in ('status', 'launch', 'routes', *WINDOW_COMMANDS):
             message = 'Probe failed. Verify the installation, package path and Windows process access.'
-        elif args.action in ('traffic-summary', 'listing-preview', 'erp-product-get', 'erp-draft-preview', 'listing-copy-check'):
+        elif args.action in ('traffic-summary', 'listing-preview', 'erp-product-get', 'erp-draft-preview',
+                             'listing-copy-check', *COLLECTED_COMMANDS):
             message = 'Could not process the input. Check the file path, JSON contents and command options.'
         else:
             message = 'Could not process the Amazon response.'

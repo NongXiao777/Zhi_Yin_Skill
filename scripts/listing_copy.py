@@ -25,6 +25,16 @@ def words_only(value):
     return ' '.join(re.findall(r'\w+', unicodedata.normalize('NFKC', value).casefold()))
 
 
+def brand_issues(value, blocked):
+    words = words_only(value)
+    issues = []
+    if AFFILIATION.search(words):
+        issues.append('brand_affiliation_language')
+    if any(f' {brand} ' in f' {words} ' for brand in blocked):
+        issues.append('blocked_brand')
+    return issues
+
+
 def load_copy(path):
     if path.stat().st_size > 250_000:
         raise ListingCopyError('Listing copy input exceeds 250 KB')
@@ -79,11 +89,7 @@ def copy_issues(copy, blocked):
                 flags.append('internal_audit_language')
             if SOURCE_OR_MARKUP.search(normalized):
                 flags.append('source_link_markup_or_non_english_copy')
-            if AFFILIATION.search(words_only(normalized)):
-                flags.append('brand_affiliation_language')
-            padded = f' {words_only(normalized)} '
-            if any(f' {brand} ' in padded for brand in blocked):
-                flags.append('blocked_brand')
+            flags.extend(brand_issues(normalized, blocked))
         if flags:
             issues[field] = list(dict.fromkeys(flags))
     reminder_count = len(REMINDER.findall('\n'.join((title, highlight, *bullets, description, search))))

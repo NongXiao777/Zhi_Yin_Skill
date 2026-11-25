@@ -76,6 +76,15 @@ class ProductCLITests(unittest.TestCase):
         self.assertTrue(result['ready_for_review'])
         self.assertEqual(result['variants'][0]['proposed_price'], '4.50')
 
+    def test_distribution_price_requires_explicit_selection(self):
+        path = self.folder / 'distribution.json'
+        path.write_text(json.dumps([{'product_id': '1', 'sale_price': '12.49', 'currency': 'USD'}]),
+                        encoding='utf-8')
+        args = ('erp-product-get', '--file', path, '--product-id', '1')
+        self.assertIsNone(self.run_cli(*args)['variants'][0]['base_price'])
+        explicit = self.run_cli(*args, '--price-column', 'sale_price')
+        self.assertEqual(explicit['variants'][0]['base_price'], '12.49')
+
     def test_description_extracts_only_labeled_packaging_and_flags_conflicts(self):
         path = self.folder / 'descriptions.json'
         path.write_text(json.dumps([

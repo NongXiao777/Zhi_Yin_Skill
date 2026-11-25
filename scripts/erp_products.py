@@ -17,7 +17,7 @@ COLUMNS = {
     'title': ('title', '标题', '产品标题', '商品名称'),
     'description': ('description', '英文描述', '英文介绍'),
     'currency': ('currency', '币种', '货币'),
-    'price': ('base_price', 'sale_price', '原售价', '售价', '销售价'),
+    'price': ('base_price', '原售价', '售价', '销售价'),
     'weight': ('gross_weight_g', '毛重(克)', '毛重(g)', '包装毛重(克)', '包装重量(克)', '包装毛重'),
     'size': ('package_cm', '包装尺寸(cm)', '包装尺寸(厘米)'),
 }
