@@ -6,8 +6,8 @@
 |---|---|
 | `status` / `launch` / `routes` | 检查或启动智赢，查看扩展中的命令定义 |
 | `window-status` / `window-focus` | 按明确请求检查现有窗口或切到前台 |
-| `collected-product-live-get` / `collected-product-live-edit` | 通过独立授权 TCP 执行器读取商品、修改加价或介绍并读回 |
-| `collected-product-get` / `collected-product-edit` | 读本地采集商品快照，预览并保存英文介绍和指定变体的加价 |
+| `collected-product-live-get` / `collected-product-live-edit` | 通过独立授权 TCP 执行器读取价格和文案、修改加价或选定文案并读回 |
+| `collected-product-get` / `collected-product-edit` | 读本地采集商品快照，预览并保存英文文案和指定变体的加价 |
 | `erp-product-get` | 从本地商品表按产品编号或父 SKU 选取商品和变体 |
 | `erp-draft-preview` | 预填包装毛重和尺寸，批量试算变体加价并保存审阅稿 |
 | `listing-copy-check` | 检查美国站五个英文字段、排除指定品牌和原厂暗示，可返回智赢英文栏位 |

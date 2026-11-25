@@ -241,6 +241,7 @@ def add_collected_commands(commands):
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument('--product-id', required=True, help='expected sale_id')
     common.add_argument('--include-intro', action='store_true', help='include the full English introduction')
+    common.add_argument('--include-copy', action='store_true', help='include available English listing fields')
     add_limit(common)
     local = argparse.ArgumentParser(add_help=False, parents=[common])
     local.add_argument('--file', type=Path, required=True, help='user-supplied collected-product JSON snapshot')
@@ -265,6 +266,7 @@ def add_collected_edit_options(edit):
                       help='add a signed delta to money for an exact variant key, repeatable')
     edit.add_argument('--minimum-channel-price', help='quote a price ending in .49, .89 or .99 at or above this amount')
     edit.add_argument('--intro-file', type=Path, help='new English introduction as UTF-8 text')
+    edit.add_argument('--copy-file', type=Path, help='UTF-8 JSON with the English listing fields to replace')
     edit.add_argument('--blocked-brand', action='append', default=[], help='brand name to exclude, repeatable')
 
 

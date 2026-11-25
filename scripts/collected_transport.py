@@ -9,7 +9,11 @@ from erp_products import FILE_LIMIT, ProductError
 
 
 TRANSPORT_ENV = 'ZHIYING_COLLECTED_TRANSPORT'
-EDIT_FIELDS = {'sale_intro': dict, 'sale_stock': list}
+EDIT_FIELDS = {'sale_intro': dict, 'sale_stock': list, 'listing_copy': dict}
+
+
+class TransportConflict(ProductError):
+    pass
 
 
 def transport_command(args):
@@ -33,7 +37,7 @@ def request(transport, payload):
         raise ProductError(f"{payload['command']} did not return a usable transport response") from None
     if not isinstance(response, dict) or response.get('ok') is not True:
         if isinstance(response, dict) and response.get('error') == 'conflict':
-            raise ProductError('Transport reported an update conflict. Read the current product before retrying.')
+            raise TransportConflict('Transport reported an update conflict. Read the current product before retrying.')
         raise ProductError(f"{payload['command']} was not acknowledged by the transport")
     return response
 
@@ -51,7 +55,7 @@ def live_result(args, *, edit=False):
     product_id = product_number(args.product_id)
     record = detail(transport, product_id)
     before = {field: deepcopy(record.get(field)) for field in EDIT_FIELDS} if edit else {}
-    result = record_result(args, product_id, record, edit=edit)
+    result = record_result(args, product_id, record, edit=edit, live=True)
     result.update(mode='live_transport', transport_calls=1)
     if not edit:
         return result
@@ -65,8 +69,11 @@ def live_result(args, *, edit=False):
             'command': 'spider.update', 'id': product_id, 'fields': changed,
             'expected': {field: before[field] for field in changed},
         })
+    except TransportConflict:
+        raise
     except ProductError as error:
-        raise ProductError(f'{error}. Update outcome is unverified. Read the product before another write.') from None
+        message = str(error).rstrip('.')
+        raise ProductError(f'{message}. Update outcome is unverified. Read the product before another write.') from None
 
     try:
         confirmed = detail(transport, product_id)

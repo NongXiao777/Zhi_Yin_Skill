@@ -24,6 +24,16 @@ python scripts/zhiying.py collected-product-edit --file product.json --product-i
 - `intro.txt` 使用 UTF-8。把素材里的可见品牌和禁用词以 `--blocked-brand` 传入，可重复。命令也检查常见原厂、官方和授权暗示。图片中的文字、Logo 和商品外观按 [图片流程](listing-images.md) 审核。
 - 省略 `--output` 仅查看预览。指定新 JSON 路径可保存并读回验证本地快照，原文件保留作回退依据。由人工把审核后的加价和介绍回填到采集记录。实际读写状态见 [采集商品接口记录](collected-product-api.md)。
 
+### 修改标题与其他文案
+
+`--include-copy` 读取商品描述和已有的英文字段。用 `--copy-file copy.json` 替换文件中指定的字段，可与改价一次执行。支持 `product_title`、`product_highlight`、`bullet_points`、`product_description` 和 `backend_search_terms`。要点用字符串数组，其余用字符串。可附 `blocked_brands` 和 `status`，状态为 `HOLD` 时停止。
+
+```json
+{"product_title":"Compact DC Worm Gear Motor","product_description":"A compact gear motor with reversible rotation."}
+```
+
+`product_description` 更新 `sale_intro` 的 `en`。其他字段以 `listing_copy` 下的语言映射保存，例如 `"listing_copy":{"product_title":{"en":"Current title","zh":"中文标题"}}`。CLI 保留其他语言和未指定的字段。详情字段映射由 [授权 TCP 执行器](collected-product-api.md) 验证。
+
 ## 选择商品
 
 ```powershell

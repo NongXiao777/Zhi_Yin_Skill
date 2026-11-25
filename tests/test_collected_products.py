@@ -97,6 +97,18 @@ class CollectedProductTests(unittest.TestCase):
         self.cli('collected-product-edit', '--intro-file', self.intro, '--output', self.output, expected=1)
         self.assertEqual(self.output.read_text(encoding='utf-8'), 'keep')
 
+    def test_partial_copy_can_fill_local_title_and_preserves_other_fields(self):
+        self.record['listing_copy'] = {'product_title': {'zh': '标题'}, 'bullet_points': {'en': 'Keep'}}
+        self.write_record()
+        self.intro.write_text(json.dumps({'product_title': 'Compact DC Motor'}), encoding='utf-8')
+        result = self.cli('collected-product-edit', '--copy-file', self.intro, '--include-copy', '--output', self.output)
+        self.assertEqual(result['copy_fields_changed'], ['product_title'])
+        self.assertEqual(result['copy_en']['product_title'], 'Compact DC Motor')
+        saved = json.loads(self.output.read_text(encoding='utf-8'))['root']
+        self.assertEqual(saved['listing_copy']['product_title']['zh'], '标题')
+        self.assertEqual(saved['listing_copy']['bullet_points']['en'], 'Keep')
+        self.assertEqual(saved['sale_intro'], self.record['sale_intro'])
+
     def test_brand_and_affiliation_block_output(self):
         self.intro.write_text('Official Acme replacement.', encoding='utf-8')
         result = self.cli('collected-product-edit', '--intro-file', self.intro, '--blocked-brand', 'Acme',

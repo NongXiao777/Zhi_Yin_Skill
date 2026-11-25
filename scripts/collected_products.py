@@ -4,12 +4,14 @@ from collections import Counter
 from decimal import Decimal, ROUND_FLOOR
 
 from erp_products import FILE_LIMIT, ProductError, decimal_text, decimal_value, positive_decimal
-from listing_copy import brand_issues, words_only
+from listing_copy import FIELDS, brand_issues, load_copy, words_only
 
 
 PRODUCT_ID_MAX = 2_147_483_647
 INTRO_LIMIT = 250_000
 PRICE_ENDINGS = (Decimal('0.49'), Decimal('0.89'), Decimal('0.99'))
+DESCRIPTION = 'product_description'
+EXTRA_COPY_FIELDS = tuple(field for field in FIELDS if field != DESCRIPTION)
 
 
 def unique_object(pairs):
@@ -127,6 +129,34 @@ def intro_text(path, blocked_brands):
     return text
 
 
+def copy_updates(path, blocked_brands):
+    copy, source_brands, status = load_copy(path, partial=True)
+    if status == 'HOLD':
+        raise ProductError('Listing copy is on HOLD')
+    blocked = {words_only(brand) for brand in [*source_brands, *blocked_brands]} - {''}
+    updates = {}
+    for field, raw in copy.items():
+        lines = raw if field == 'bullet_points' else [raw]
+        if field != 'backend_search_terms' and (not lines or any(not line for line in lines)):
+            raise ProductError(f'{field} must contain nonempty text')
+        text = '\n'.join(lines)
+        issues = brand_issues(text, blocked)
+        if issues:
+            raise ProductError(f'{field} failed checks: ' + ', '.join(issues))
+        updates[field] = text
+    return updates
+
+
+def copy_locales(record):
+    copy = collection(record, 'listing_copy', dict)
+    for field in EXTRA_COPY_FIELDS:
+        if field in copy:
+            locales = copy[field]
+            if not isinstance(locales, dict) or any(not isinstance(value, str) for value in locales.values()):
+                raise ProductError(f'{field} must map languages to text')
+    return copy
+
+
 def save_snapshot(path, snapshot, product_id):
     if path.suffix.lower() != '.json':
         raise ProductError('Choose a .json output file')
@@ -159,7 +189,7 @@ def collected_result(args, *, edit=False):
     return result
 
 
-def record_result(args, product_id, record, *, edit=False):
+def record_result(args, product_id, record, *, edit=False, live=False):
     stock = collection(record, 'sale_stock', list)
     intro = collection(record, 'sale_intro', dict)
     if any(not isinstance(item, dict) for item in stock):
@@ -174,11 +204,17 @@ def record_result(args, product_id, record, *, edit=False):
         value = record.get(field)
         result[field] = decimal_text(amount(value)) if value is not None and value != '' else None
 
+    translations = copy_locales(record) if args.include_copy or (edit and args.copy_file is not None) else {}
     if edit:
+        updates = copy_updates(args.copy_file, args.blocked_brand) if args.copy_file is not None else {}
+        if args.intro_file is not None:
+            if DESCRIPTION in updates:
+                raise ProductError('Supply the English description through one option')
+            updates[DESCRIPTION] = intro_text(args.intro_file, args.blocked_brand)
         edits = [(key, value, False) for key, value in args.set_surcharge]
         edits.extend((key, value, True) for key, value in args.adjust_surcharge)
-        if not edits and args.intro_file is None and args.minimum_channel_price is None:
-            raise ProductError('Provide a surcharge, an introduction file or a minimum channel price')
+        if not edits and not updates and args.minimum_channel_price is None:
+            raise ProductError('Provide a surcharge, copy to update or a minimum channel price')
         if len({key for key, _, _ in edits}) != len(edits):
             raise ProductError('Specify each variant key at most once per edit')
         counts = Counter(keys)
@@ -203,12 +239,23 @@ def record_result(args, product_id, record, *, edit=False):
             set_collection(record, 'sale_stock', stock)
         result['variant_changes'] = changes
 
-        if args.intro_file is not None:
-            text = intro_text(args.intro_file, args.blocked_brand)
+        if DESCRIPTION in updates:
+            text = updates.pop(DESCRIPTION)
             result['intro_changed'] = text != intro.get('en')
             if result['intro_changed']:
                 intro['en'] = text
                 set_collection(record, 'sale_intro', intro)
+
+        if live and updates.keys() - translations.keys():
+            missing = ', '.join(sorted(updates.keys() - translations.keys()))
+            raise ProductError(f'The live transport did not expose these listing fields: {missing}')
+        copy_changes = [field for field, text in updates.items() if translations.get(field, {}).get('en') != text]
+        for field in copy_changes:
+            translations.setdefault(field, {})['en'] = updates[field]
+        if copy_changes:
+            set_collection(record, 'listing_copy', translations)
+        if args.copy_file is not None:
+            result['copy_fields_changed'] = copy_changes + ([DESCRIPTION] if result.get('intro_changed') else [])
         if args.minimum_channel_price is not None:
             minimum = positive_decimal(args.minimum_channel_price)
             result['channel_price_quote'] = {
@@ -218,6 +265,9 @@ def record_result(args, product_id, record, *, edit=False):
     result['intro_en_characters'] = len(intro.get('en', ''))
     if args.include_intro:
         result['intro_en'] = intro.get('en')
+    if args.include_copy:
+        result['copy_en'] = {field: translations[field].get('en') for field in EXTRA_COPY_FIELDS if field in translations}
+        result['copy_en'][DESCRIPTION] = intro.get('en')
     result['returned'] = min(len(stock), args.limit)
     result['variants'] = [
         {'key': key or None, 'no': item.get('no'), 'spec': item.get('spec'), 'money': decimal_text(surcharge)}

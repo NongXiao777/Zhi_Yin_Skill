@@ -1,17 +1,17 @@
 # 采集商品接口静态核验
 
-核验日期：2026-11-25。通过 IDA Pro MCP 和离线 .NET 元数据/IL 分析，检查了 `ZYing.User.dll`、`ZYing.Work.dll`、`ZYing.Core.dll`、`ZYing.UI.dll` 及智赢扩展 5.2.4。不同安装版本的混淆地址不能混用；此处仅保存脱敏的调用和参数结论，不附程序集、账号数据或解码资源。
+核验日期：2026-11-25。通过 IDA Pro MCP 和离线 .NET 元数据/IL 分析，检查了 `ZYing.User.dll`、`ZYing.Work.dll`、`ZYing.Core.dll`、`ZYing.UI.dll` 及智赢扩展 5.2.4。用户补充的脱敏分析所列 DLL 与当前安装版哈希不同。按安装版本核对混淆符号和字段映射。
 
 **线上读写仍待验证。** 本机已确认当前智赢进程以普通权限运行，CLI 能识别进程，当时未发现进程监听的本地 TCP 端口。扩展 5.2.4 和已查看的厂商公开文档没有提供这些操作的授权接入方式。下面保留静态证据。本地文件工作流见 [商品预览](erp-products.md)。
 
 ## 命令行接入
 
-CLI 的真实商品命令需要已经获授权的 TCP 执行器。通过 `--transport` 传可执行文件路径，或在本机设置 `ZHIYING_COLLECTED_TRANSPORT`。本项目目前只有执行器契约，真实会话和智赢 TCP 传输由执行器负责。
+CLI 的真实商品命令需要已经获授权的 TCP 执行器。通过 `--transport` 传可执行文件路径，或在本机设置 `ZHIYING_COLLECTED_TRANSPORT`。本项目目前只有执行器契约，真实会话和智赢 TCP 传输由执行器负责。可先人工登录，再通过智赢允许的接入方式把正常授权会话交给执行器。
 
 ```powershell
-python scripts/zhiying.py collected-product-live-get --product-id 954521907 --include-intro
+python scripts/zhiying.py collected-product-live-get --product-id 954521907 --include-copy
 python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --set-surcharge EXACT_KEY 1.00
-python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --intro-file intro.txt
+python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --copy-file copy.json
 ```
 
 先读回记录并核对真实变体键。执行器经标准输入接收一个 UTF-8 JSON 对象，经标准输出返回一个 UTF-8 JSON 对象。凭据由执行器使用正常授权方式管理。
@@ -22,6 +22,8 @@ python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --i
 | `{"command":"spider.update","id":954521907,"expected":{...},"fields":{...}}` | 校验 `expected` 中将要更改的字段基线，只保存 `fields` 中的字段。成功返回 `{"ok":true}`，冲突返回 `{"ok":false,"error":"conflict"}` |
 
 上表是进程间契约。TCP 编码、认证方式和服务端认可的更新范围仍需在实际执行器上验证。CLI 更新后会再次调用 `spider.detail`，逐个对比提交字段，只有匹配时才返回 `remote_read_back_verified: true`。若保存结果不明或读回失败，先重新读取现状。
+
+执行器可以在读回的 `record.listing_copy` 下提供已核实的标题、短标题、要点和关键词语言映射。已支持但没有值的字段返回空对象。CLI 只向执行器提交它已暴露的文案字段。该映射属于 CLI 契约，具体原生字段由执行器核实并转换。`sale_en` 保留报关英文简称用途。示例见 [修改标题与其他文案](erp-products.md#修改标题与其他文案)。
 
 ## 已有采集商品详情
 

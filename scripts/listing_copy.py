@@ -35,7 +35,7 @@ def brand_issues(value, blocked):
     return issues
 
 
-def load_copy(path):
+def load_copy(path, *, partial=False):
     if path.stat().st_size > 250_000:
         raise ListingCopyError('Listing copy input exceeds 250 KB')
     try:
@@ -44,8 +44,12 @@ def load_copy(path):
         raise ListingCopyError('Provide a valid listing copy JSON object') from None
     if not isinstance(draft, dict):
         raise ListingCopyError('Provide a listing copy JSON object')
+    if partial and set(draft) - set(FIELDS) - {'blocked_brands', 'status'}:
+        raise ListingCopyError('Partial copy contains an unknown listing field')
     copy = {}
     for field in FIELDS:
+        if partial and field not in draft:
+            continue
         value = draft.get(field)
         if field == 'bullet_points':
             if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
@@ -55,6 +59,8 @@ def load_copy(path):
             raise ListingCopyError(f'{field} must be a string')
         else:
             copy[field] = value.strip()
+    if partial and not copy:
+        raise ListingCopyError('Provide at least one listing field to update')
     source_brands = draft.get('blocked_brands', [])
     if not isinstance(source_brands, list) or any(not isinstance(brand, str) for brand in source_brands):
         raise ListingCopyError('blocked_brands must be an array of strings')
