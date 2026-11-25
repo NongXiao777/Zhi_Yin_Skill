@@ -6,6 +6,7 @@
 |---|---|
 | `status` / `launch` / `routes` | 检查或启动智赢，查看扩展中的命令定义 |
 | `window-status` / `window-focus` | 按明确请求检查现有窗口或切到前台 |
+| `collected-product-live-get` / `collected-product-live-edit` | 通过独立授权 TCP 执行器读取商品、修改加价或介绍并读回 |
 | `collected-product-get` / `collected-product-edit` | 读本地采集商品快照，预览并保存英文介绍和指定变体的加价 |
 | `erp-product-get` | 从本地商品表按产品编号或父 SKU 选取商品和变体 |
 | `erp-draft-preview` | 预填包装毛重和尺寸，批量试算变体加价并保存审阅稿 |
@@ -29,7 +30,7 @@ python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --b
 
 示例使用合成数据。实际报告可放在 Git 忽略的 `reports/` 目录。以关键词 `--help` 查看每条命令的参数。默认优先使用 `%LOCALAPPDATA%\Programs\ZYing\ZYing.exe`，不存在时检查 `D:\ZYing\ZYing.exe`，扩展路径为 `%LOCALAPPDATA%\ZYing\zying-ext.crx`。可在子命令前使用 `--app` 和 `--extension` 指定其他路径。`launch` 返回的是初次观察到的进程状态。
 
-商品表支持 CSV、TSV、JSON 和 XLSX。采集商品 JSON 可按变体键更新加价、更新英文介绍并保存到新文件。列名、单位和定价规则见 [ERP 商品预览](references/erp-products.md)。真实采集记录的详情和保存接口仍待授权联机验证。见 [采集商品接口记录](references/collected-product-api.md)。
+商品表支持 CSV、TSV、JSON 和 XLSX。采集商品 JSON 可按变体键更新加价、更新英文介绍并保存到新文件。列名、单位和定价规则见 [ERP 商品预览](references/erp-products.md)。真实记录命令需要另行配置授权 TCP 执行器，智赢实连仍待验证。见 [采集商品接口记录](references/collected-product-api.md)。
 
 商品介绍缺失时，按 [Amazon.com 文案流程](references/listing-workflow.md) 先核验并生成缺失内容，再用 `listing-copy-check` 检查。主图、场景图、细节图和尺寸图的制作边界见 [商品图片](references/listing-images.md)。
 

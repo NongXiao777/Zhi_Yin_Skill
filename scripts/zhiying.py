@@ -15,6 +15,7 @@ from pathlib import Path
 
 TRAFFIC_SORTS = ('source', 'sessions', 'units_ordered', 'unit_session_percentage')
 COLLECTED_COMMANDS = ('collected-product-get', 'collected-product-edit')
+LIVE_COLLECTED_COMMANDS = ('collected-product-live-get', 'collected-product-live-edit')
 WINDOW_COMMANDS = ('window-status', 'window-focus')
 
 
@@ -238,12 +239,26 @@ def add_erp_commands(commands):
 
 def add_collected_commands(commands):
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument('--file', type=Path, required=True, help='user-supplied collected-product JSON snapshot')
     common.add_argument('--product-id', required=True, help='expected sale_id')
     common.add_argument('--include-intro', action='store_true', help='include the full English introduction')
     add_limit(common)
-    commands.add_parser(COLLECTED_COMMANDS[0], parents=[common], help='read fields from a collected-product snapshot')
-    edit = commands.add_parser(COLLECTED_COMMANDS[1], parents=[common], help='preview or save a local snapshot edit')
+    local = argparse.ArgumentParser(add_help=False, parents=[common])
+    local.add_argument('--file', type=Path, required=True, help='user-supplied collected-product JSON snapshot')
+    remote = argparse.ArgumentParser(add_help=False, parents=[common])
+    remote.add_argument('--transport', type=Path, help='authorized TCP transport executable')
+    remote.add_argument('--transport-arg', action='append', default=[], help='transport argument, repeatable')
+    edits = argparse.ArgumentParser(add_help=False)
+    add_collected_edit_options(edits)
+    commands.add_parser(COLLECTED_COMMANDS[0], parents=[local], help='read fields from a collected-product snapshot')
+    local_edit = commands.add_parser(COLLECTED_COMMANDS[1], parents=[local, edits],
+                                     help='preview or save a local snapshot edit')
+    local_edit.add_argument('--output', type=Path, help='save and reread a new local JSON snapshot')
+    commands.add_parser(LIVE_COLLECTED_COMMANDS[0], parents=[remote], help='read through an authorized transport')
+    commands.add_parser(LIVE_COLLECTED_COMMANDS[1], parents=[remote, edits],
+                        help='update through an authorized transport and read back the result')
+
+
+def add_collected_edit_options(edit):
     edit.add_argument('--set-surcharge', action='append', nargs=2, default=[], metavar=('KEY', 'AMOUNT'),
                       help='set money for an exact variant key, repeatable')
     edit.add_argument('--adjust-surcharge', action='append', nargs=2, default=[], metavar=('KEY', 'DELTA'),
@@ -251,7 +266,6 @@ def add_collected_commands(commands):
     edit.add_argument('--minimum-channel-price', help='quote a price ending in .49, .89 or .99 at or above this amount')
     edit.add_argument('--intro-file', type=Path, help='new English introduction as UTF-8 text')
     edit.add_argument('--blocked-brand', action='append', default=[], help='brand name to exclude, repeatable')
-    edit.add_argument('--output', type=Path, help='save and reread a new local JSON snapshot')
 
 
 def add_sp_api_commands(commands, regions):
@@ -350,9 +364,13 @@ def main():
         elif args.action in WINDOW_COMMANDS:
             from window_control import window_focus, window_status
             result = window_status(args.app) if args.action == 'window-status' else window_focus(args.app, args.window)
-        elif args.action in COLLECTED_COMMANDS:
+        elif args.action in (*COLLECTED_COMMANDS, *LIVE_COLLECTED_COMMANDS):
             from collected_products import collected_result, encode_json
-            result = collected_result(args, edit=args.action == 'collected-product-edit')
+            from collected_transport import live_result
+            if args.action in LIVE_COLLECTED_COMMANDS:
+                result = live_result(args, edit=args.action == 'collected-product-live-edit')
+            else:
+                result = collected_result(args, edit=args.action == 'collected-product-edit')
             print(encode_json(result))
             return 0
         elif args.action == 'traffic-summary':
@@ -382,7 +400,7 @@ def main():
         if args.action in ('status', 'launch', 'routes', *WINDOW_COMMANDS):
             message = 'Probe failed. Verify the installation, package path and Windows process access.'
         elif args.action in ('traffic-summary', 'listing-preview', 'erp-product-get', 'erp-draft-preview',
-                             'listing-copy-check', *COLLECTED_COMMANDS):
+                             'listing-copy-check', *COLLECTED_COMMANDS, *LIVE_COLLECTED_COMMANDS):
             message = 'Could not process the input. Check the file path, JSON contents and command options.'
         else:
             message = 'Could not process the Amazon response.'

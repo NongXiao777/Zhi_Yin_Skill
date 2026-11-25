@@ -151,6 +151,15 @@ def save_snapshot(path, snapshot, product_id):
 def collected_result(args, *, edit=False):
     product_id = product_number(args.product_id)
     snapshot, record = read_snapshot(args.file, product_id)
+    result = record_result(args, product_id, record, edit=edit)
+    result.update(mode='local_snapshot', business_requests_sent=0)
+    if edit and args.output is not None:
+        save_snapshot(args.output, snapshot, product_id)
+        result.update(saved_to=str(args.output), local_read_back_verified=True)
+    return result
+
+
+def record_result(args, product_id, record, *, edit=False):
     stock = collection(record, 'sale_stock', list)
     intro = collection(record, 'sale_intro', dict)
     if any(not isinstance(item, dict) for item in stock):
@@ -159,8 +168,7 @@ def collected_result(args, *, edit=False):
         raise ProductError('sale_intro must map languages to text')
     keys = [variant_key(item) for item in stock]
     surcharges = [existing_surcharge(item) for item in stock]
-    result = {'mode': 'local_snapshot', 'product_id': product_id, 'business_requests_sent': 0,
-              'sale_cur': record.get('sale_cur'), 'sale_weight': record.get('sale_weight'),
+    result = {'product_id': product_id, 'sale_cur': record.get('sale_cur'), 'sale_weight': record.get('sale_weight'),
               'sale_size': record.get('sale_size'), 'total_variants': len(stock)}
     for field in ('sale_cost', 'sale_price'):
         value = record.get(field)
@@ -206,9 +214,6 @@ def collected_result(args, *, edit=False):
             result['channel_price_quote'] = {
                 'minimum': decimal_text(minimum), 'price': decimal_text(channel_price(minimum)),
             }
-        if args.output is not None:
-            save_snapshot(args.output, snapshot, product_id)
-            result.update(saved_to=str(args.output), local_read_back_verified=True)
 
     result['intro_en_characters'] = len(intro.get('en', ''))
     if args.include_intro:

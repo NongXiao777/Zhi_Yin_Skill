@@ -4,6 +4,25 @@
 
 **线上读写仍待验证。** 本机已确认当前智赢进程以普通权限运行，CLI 能识别进程，当时未发现进程监听的本地 TCP 端口。扩展 5.2.4 和已查看的厂商公开文档没有提供这些操作的授权接入方式。下面保留静态证据。本地文件工作流见 [商品预览](erp-products.md)。
 
+## 命令行接入
+
+CLI 的真实商品命令需要已经获授权的 TCP 执行器。通过 `--transport` 传可执行文件路径，或在本机设置 `ZHIYING_COLLECTED_TRANSPORT`。本项目目前只有执行器契约，真实会话和智赢 TCP 传输由执行器负责。
+
+```powershell
+python scripts/zhiying.py collected-product-live-get --product-id 954521907 --include-intro
+python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --set-surcharge EXACT_KEY 1.00
+python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --intro-file intro.txt
+```
+
+先读回记录并核对真实变体键。执行器经标准输入接收一个 UTF-8 JSON 对象，经标准输出返回一个 UTF-8 JSON 对象。凭据由执行器使用正常授权方式管理。
+
+| CLI 发给执行器的请求 | 执行器的响应和责任 |
+|---|---|
+| `{"command":"spider.detail","id":954521907}` | `{"ok":true,"record":{...}}`。返回同一 `sale_id` 及现有语言和完整变体集合 |
+| `{"command":"spider.update","id":954521907,"expected":{...},"fields":{...}}` | 校验 `expected` 中将要更改的字段基线，只保存 `fields` 中的字段。成功返回 `{"ok":true}`，冲突返回 `{"ok":false,"error":"conflict"}` |
+
+上表是进程间契约。TCP 编码、认证方式和服务端认可的更新范围仍需在实际执行器上验证。CLI 更新后会再次调用 `spider.detail`，逐个对比提交字段，只有匹配时才返回 `remote_read_back_verified: true`。若保存结果不明或读回失败，先重新读取现状。
+
 ## 已有采集商品详情
 
 ```text
@@ -105,4 +124,4 @@ Core 编码层能构造少量列，例如 `id(Int32)` 加 `sale_stock(String)` �
 
 ## 真实接口验收
 
-取得受支持的接入方式后，先读实账户里的采集商品并核对编号、币种、变体键、原加价和英文介绍。按授权范围验证更新范围和可能的状态变化。以一次只改目标字段的保存开始，重新查询确认值和其他语言、变体，再按原值恢复并重新读回。当前文件写入验收只覆盖本地快照。
+取得受支持的接入方式后，先读实账户里的采集商品并核对编号、币种、变体键、原加价和英文介绍。按授权范围验证更新范围和可能的状态变化。以一次只改目标字段的保存开始，重新查询确认值和其他语言、变体，再按原值恢复并重新读回。自动化测试覆盖本地快照和执行器契约。真实验收以授权 TCP 执行器返回的商品和保存后读回为准。
