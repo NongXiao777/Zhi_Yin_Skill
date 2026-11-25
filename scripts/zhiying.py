@@ -162,6 +162,9 @@ def main():
     commands = parser.add_subparsers(dest='action', required=True)
     commands.add_parser('status')
     commands.add_parser('launch')
+    commands.add_parser('window-status')
+    focus_parser = commands.add_parser('window-focus')
+    focus_parser.add_argument('--window', type=int, help='Handle returned by window-status')
     route_parser = commands.add_parser('routes')
     route_parser.add_argument('--match', default='')
     route_parser.add_argument('--limit', type=int, choices=range(1, 51), default=10, metavar='1..50')
@@ -178,10 +181,16 @@ def main():
             result = launch(args.app, args.extension)
         elif args.action == 'routes':
             result = routes(args.extension, args.match, args.limit)
+        elif args.action == 'window-status':
+            from window_control import window_status
+            result = window_status(args.app)
+        elif args.action == 'window-focus':
+            from window_control import window_focus
+            result = window_focus(args.app, args.window)
         else:
             result = traffic_summary(args.file.resolve(), args.limit)
         emit(result)
-        return 0
+        return 1 if result.get('ok') is False else 0
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired, zipfile.BadZipFile, KeyError):
         emit({'ok': False, 'error': 'Probe failed; verify the installation, package path and Windows process access'})
         return 1

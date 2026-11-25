@@ -1,10 +1,16 @@
-# Verified interface notes, 2026-11-20
+# Verified interface notes, 2026-11-25
 
-The installed application is 智赢跨境. The earlier chat called it 智慧跨境. The shortcut targets `D:\ZYing\ZYing.exe` with working directory `D:\ZYing` and no arguments. The application is .NET 6 WinForms with CefSharp, not an Electron app.
+The installed application is 智赢跨境. The earlier chat called it 智慧跨境. The first inspected shortcut targeted `D:\ZYing\ZYing.exe` with working directory `D:\ZYing` and no arguments. A later running installation used `G:\ZYing\ZYing.exe`; use the configurable `--app` path. The application is .NET 6 WinForms with CefSharp, not an Electron app.
 
 ## Native startup
 
 Static metadata and method-body inspection found `ZYing.Program.Main` calling `ZYing.Global.Start`. `Global.Start` reads the process argument array and passes its first extra argument to the startup form, where it flows into an internal token field. An internal overload launches this executable with a GUID argument. A `--BasePath` utility setting exists, but business CLI commands were not established. `Program.ReadLine` reads a supplied stream; a standard-input command loop was not established. Do not guess `--help` or Chromium debug flags on this executable.
+
+## Existing window control
+
+`window-status` finds visible top-level windows owned by the selected executable. `window-focus` activates an existing window with Windows APIs and verifies the foreground handle. Cross-thread activation is asynchronous, so a harmless `WM_NULL` message synchronizes with the target, followed by a bounded observation of foreground completion. Activation is issued once.
+
+On 2026-11-25, an existing client window was successfully activated and returned `foreground=true` and `window_responding=true`. This does not verify login permissions or product calls, and it does not establish a CDP or application-specific control endpoint. The existing `launch` command's earlier startup observations remain separate from this activation check.
 
 ## HTTP commands
 
@@ -19,6 +25,10 @@ Installed Chrome extension `zying-ext.crx`, version 5.2.1, contains `assets/js/c
 | `https://erp.zying.net/api` | `shipper.shippers` | POST | Request definition only |
 
 Path format is `/CmdHandler?cmd=<command>`. The transport serializes `data` with `JSON.stringify` and includes `token`, `appclient`, `timestamp`, `signature`, `version`, and `client_identify` headers. The signing helper is called with appClient `3` and version `v1.1`. Payload schemas and authenticated behavior were not validated. Command names alone do not establish whether an operation is read-only.
+
+The subsequent 5.2.4 extension inspection established that `common.getPluginOrderDetail` calls `plugin.detail` at `https://erp.zying.net/api` for procurement/order details (`root`, `items`, `buys`). That operation is not a collected-product detail call. New collection uses `spider.insert` and `spider.ins` at `https://seller.zying.net/api`; Mercado Libre collection also has `MeliBest/Spider` and `MeliBest/SpiderUP`. These are creation/import routes, not verified existing-product updates. Earlier 5.2.1 definitions above are version-specific observations, not interchangeable endpoint mappings.
+
+The 5.2.4 registered actions and dynamic-command whitelist did not expose `spider.detail` or `spider.update`. The confirmed desktop collected-product chain uses private TCP binary RPC. See [collected-product-api.md](collected-product-api.md) for exact field meanings, encoding and the remaining invocation boundary.
 
 These are client-internal endpoints, not a confirmed public integration API. No credentials, cookies, business databases or authenticated API responses were read. The supplied script inspects source definitions and never sends a business API request.
 
