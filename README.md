@@ -11,6 +11,7 @@
 | `window-status` / `window-focus` | 按明确请求检查现有窗口或切到前台 |
 | `collected-transport-probe` | 无窗口加载原生 TCP 组件并验证请求编码 |
 | `product-live-get` / `product-live-edit` | 通过 `sale.detail/update` 读取或保存“我的产品”，并读回核验 |
+| `product-plan` / `product-plan-show` / `product-apply` / `product-restore` | 保存实际改动计划、提交前持久化意图、防并发重放、按目标还原并保留无关编辑 |
 | `collected-product-live-get` / `collected-product-live-edit` | 通过 `spider.detail/update` 读取或保存“产品采集”，并读回核验 |
 | `collected-product-get` / `collected-product-edit` | 读本地采集商品快照，预览并保存英文文案和指定变体的加价 |
 | `erp-product-get` | 从本地商品表按产品编号或父 SKU 选取商品和变体 |

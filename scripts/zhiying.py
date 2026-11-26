@@ -17,6 +17,7 @@ TRAFFIC_SORTS = ('source', 'sessions', 'units_ordered', 'unit_session_percentage
 COLLECTED_COMMANDS = ('collected-product-get', 'collected-product-edit')
 LIVE_COLLECTED_COMMANDS = ('collected-product-live-get', 'collected-product-live-edit', 'product-live-get', 'product-live-edit')
 WINDOW_COMMANDS = ('window-status', 'window-focus')
+PLAN_COMMANDS = ('product-plan', 'product-plan-show', 'product-apply', 'product-restore')
 
 
 def emit(value):
@@ -259,6 +260,19 @@ def add_collected_commands(commands):
                         help='update through an authorized transport and read back the result')
     commands.add_parser('product-live-get', parents=[remote], help='read a My Products record through the authorized sale.detail transport')
     commands.add_parser('product-live-edit', parents=[remote, edits], help='update a My Products record through sale.update and verify by reading it back')
+    plan = commands.add_parser('product-plan', parents=[remote, edits],
+                               help='read a product and save a persistent edit plan without submitting')
+    plan.add_argument('--namespace', choices=('sale', 'spider'), required=True)
+    plan.add_argument('--output', type=Path, required=True)
+    show = commands.add_parser('product-plan-show', help='validate and show the actual changes and submission state')
+    show.add_argument('--plan', type=Path, required=True)
+    transport = argparse.ArgumentParser(add_help=False)
+    transport.add_argument('--transport', type=Path)
+    transport.add_argument('--transport-arg', action='append', default=[])
+    for name, help_text in [('product-apply', 'submit a prepared plan once and read back'),
+                            ('product-restore', 'restore planned targets while retaining independent edits')]:
+        command = commands.add_parser(name, parents=[transport], help=help_text)
+        command.add_argument('--plan', type=Path, required=True)
 
 
 def add_collected_edit_options(edit):
@@ -379,6 +393,17 @@ def main():
         elif args.action == 'collected-transport-probe':
             from collected_transport import native_probe
             result = native_probe(args.app)
+        elif args.action in PLAN_COMMANDS:
+            from product_plans import create_plan, inspect_plan, apply_plan, restore_plan
+            from collected_transport import transport_command
+            if args.action == 'product-plan-show':
+                result = inspect_plan(args.plan)
+            else:
+                transport = transport_command(args)
+                if args.action == 'product-plan':
+                    result = create_plan(transport, args.product_id, args.namespace, args, args.output)
+                else:
+                    result = (apply_plan if args.action == 'product-apply' else restore_plan)(transport, args.plan)
         elif args.action in (*COLLECTED_COMMANDS, *LIVE_COLLECTED_COMMANDS):
             from collected_products import collected_result, encode_json
             from collected_transport import live_result
@@ -422,6 +447,8 @@ def main():
         elif args.action in ('traffic-summary', 'pricing-quote', 'listing-preview', 'erp-product-get', 'erp-draft-preview',
                              'listing-copy-check', *COLLECTED_COMMANDS, *LIVE_COLLECTED_COMMANDS):
             message = 'Could not process the input. Check the file path, JSON contents and command options.'
+        elif args.action in PLAN_COMMANDS:
+            message = 'Could not process the product plan. Inspect its saved state before another write.'
         else:
             message = 'Could not process the Amazon response.'
         emit({'ok': False, 'error': message})
