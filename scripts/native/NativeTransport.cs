@@ -239,10 +239,17 @@ internal sealed class NativeTransport
             throw new InvalidOperationException("login_response_incomplete");
         // Read only these session columns: Member.Parse also consumes unrelated
         // service credentials and runs client configuration side effects.
-        return new JsonObject {
+        var session = new JsonObject {
             ["server_address"] = lastEndpoint.Address.ToString(), ["server_port"] = lastEndpoint.Port,
             ["token"] = token.ToString(), ["user_id"] = user
         };
+        string deviceField = profile["device_id_field"]?.GetValue<string>();
+        if (!string.IsNullOrEmpty(deviceField))
+            session["device_id"] = ((Guid)rpcType.GetField(deviceField).GetValue(null)).ToString();
+        string stateField = profile["exchange_state_field"]?.GetValue<string>();
+        if (!string.IsNullOrEmpty(stateField))
+            session["exchange_state"] = (int)rpcType.GetField(stateField).GetValue(null);
+        return session;
     }
 
     private async Task<JsonObject> Login(JsonObject input)
@@ -340,14 +347,14 @@ internal sealed class NativeTransport
         return record;
     }
 
-    private async Task<JsonObject> Update(int id, JsonObject input)
+    private async Task<JsonObject> Update(int id, JsonObject input, string command = "spider.update")
     {
         var fields = input["fields"] as JsonObject;
         var expected = input["expected"] as JsonObject;
         if (fields == null || expected == null || fields.Count == 0 ||
             fields.Count != expected.Count || fields.Any(p => !Editable.Contains(p.Key) || !expected.ContainsKey(p.Key)))
             throw new InvalidOperationException("invalid_update_fields");
-        var current = await Read(id);
+        var current = await Read(id, command == "sale.update" ? "sale.detail" : "spider.detail");
         foreach (var pair in fields)
         {
             if (current[pair.Key]?.ToJsonString() != expected[pair.Key]?.ToJsonString())
@@ -355,14 +362,14 @@ internal sealed class NativeTransport
             if (pair.Value is not JsonValue value || !value.TryGetValue<string>(out var _))
                 throw new InvalidOperationException("native_fields_require_json_strings");
         }
-        var update = new JsonObject { ["id"] = id };
+        var update = new JsonObject { ["sale_id"] = id };
         foreach (var pair in fields)
             update[pair.Key] = JsonNode.Parse(pair.Value.ToJsonString());
         var record = recordType.GetMethod("FromJson", new[] { typeof(string) })
                                .Invoke(null, new object[] { update.ToJsonString() });
         var rows = Array.CreateInstance(recordType, 1);
         rows.SetValue(record, 0);
-        await Send("spider.update", rows);
+        await Send(command, rows);
         return new JsonObject { ["ok"] = true };
     }
 
@@ -448,8 +455,8 @@ internal sealed class NativeTransport
                     throw new InvalidOperationException("wrong_product");
                 if (command == "spider.detail" || command == "sale.detail")
                     response = new JsonObject { ["ok"] = true, ["record"] = await transport.Read(id, command) };
-                else if (command == "spider.update")
-                    response = await transport.Update(id, input);
+                else if (command == "spider.update" || command == "sale.update")
+                    response = await transport.Update(id, input, command);
                 else
                     throw new InvalidOperationException("unsupported_command");
             }

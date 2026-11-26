@@ -129,7 +129,8 @@ def detail(transport, product_id, command='spider.detail'):
 def live_result(args, *, edit=False):
     transport = transport_command(args)
     product_id = product_number(args.product_id)
-    command = 'sale.detail' if args.action == 'product-live-get' else 'spider.detail'
+    source = 'sale' if args.action in ('product-live-get', 'product-live-edit') else 'spider'
+    command = source + '.detail'
     record = detail(transport, product_id, command)
     before = {field: deepcopy(record.get(field)) for field in EDIT_FIELDS} if edit else {}
     result = record_result(args, product_id, record, edit=edit, live=True)
@@ -143,7 +144,7 @@ def live_result(args, *, edit=False):
 
     try:
         request(transport, {
-            'command': 'spider.update', 'id': product_id, 'fields': changed,
+            'command': source + '.update', 'id': product_id, 'fields': changed,
             'expected': {field: before[field] for field in changed},
         })
     except TransportConflict:
@@ -153,7 +154,7 @@ def live_result(args, *, edit=False):
         raise ProductError(f'{message}. Update outcome is unverified. Read the product before another write.') from None
 
     try:
-        confirmed = detail(transport, product_id)
+        confirmed = detail(transport, product_id, command)
         matches = all(collection(confirmed, field, EDIT_FIELDS[field])
                       == collection(record, field, EDIT_FIELDS[field]) for field in changed)
     except ProductError:

@@ -21,7 +21,7 @@ request = json.loads(sys.stdin.buffer.read().decode('utf-8'))
 with log.open('a', encoding='utf-8') as output:
     output.write(json.dumps(request) + '\\n')
 product = json.loads(state.read_text(encoding='utf-8'))
-if request['command'] == 'spider.detail':
+if request['command'] in ('spider.detail', 'sale.detail'):
     print(json.dumps({'ok': True, 'record': product}))
 elif behavior == 'conflict' or any(product.get(key) != value for key, value in request['expected'].items()):
     print(json.dumps({'ok': False, 'error': 'conflict'}))
@@ -46,12 +46,12 @@ class CollectedTransportTests(unittest.TestCase):
                        'sale_stock': '[{"key":"target","money":1.0},{"key":"other","money":2.0,"num":5}]'}
         self.state.write_text(json.dumps(self.record), encoding='utf-8')
 
-    def cli(self, action, *options, transport=True, behavior='save', expected=0):
+    def cli(self, action, *options, transport=True, behavior='save', expected=0, source='collected-product'):
         env = os.environ.copy()
         env.pop('ZHIYING_COLLECTED_TRANSPORT', None)
         env.pop('ZHIYING_SESSION_FILE', None)
         env['LOCALAPPDATA'] = str(self.state.parent / 'isolated-local-appdata')
-        command = [sys.executable, str(CLI), f'collected-product-live-{action}', '--product-id', '1001']
+        command = [sys.executable, str(CLI), f'{source}-live-{action}', '--product-id', '1001']
         if transport:
             command.extend(['--transport', sys.executable,
                             '--transport-arg', str(self.script),
@@ -160,6 +160,21 @@ class CollectedTransportTests(unittest.TestCase):
         self.assertEqual(json.loads(write['fields']['sale_intro']), {'en': 'Old*', 'zh': 'Keep'})
         self.assertEqual(json.loads(write['fields']['sale_stock']), [
             {'key': 'target', 'money': 1.01}, {'key': 'other', 'money': 2.01, 'num': 5}])
+
+    def test_my_products_edit_uses_sale_for_read_write_and_confirmation(self):
+        result = self.cli('edit', '--adjust-surcharge', 'target', '0.01',
+                          '--adjust-surcharge', 'other', '0.01', '--append-intro', '*', source='product')
+        self.assertTrue(result['remote_read_back_verified'])
+        self.assertEqual([call['command'] for call in self.calls()], ['sale.detail', 'sale.update', 'sale.detail'])
+        saved = json.loads(self.state.read_text(encoding='utf-8'))
+        self.assertEqual(json.loads(saved['sale_intro']), {'en': 'Old*', 'zh': 'Keep'})
+        self.assertEqual([row['money'] for row in json.loads(saved['sale_stock'])], [1.01, 2.01])
+
+    def test_unconfirmed_my_products_update_does_not_repeat_the_delta(self):
+        result = self.cli('edit', '--adjust-surcharge', 'target', '0.01', '--append-intro', '*',
+                          source='product', behavior='ignore', expected=1)
+        self.assertIn('read-back differs', result['error'])
+        self.assertEqual([call['command'] for call in self.calls()], ['sale.detail', 'sale.update', 'sale.detail'])
 
     def test_missing_intro_rejects_the_entire_edit_before_a_live_write(self):
         self.record['sale_intro'] = '{"zh":"Keep"}'

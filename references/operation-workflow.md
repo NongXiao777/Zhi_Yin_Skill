@@ -8,11 +8,11 @@
 |---|---|---|
 | 打开定价表 | 接收本地 JSON、CSV、TSV、XLSX 商品表；`erp-product-get` 按编号或父 SKU 选择记录 | 现有定价表的路径、表头、公式和币种尚未提供。先用用户的表或明确输入，不能推断原表的计算规则 |
 | 打开 VPN、Chin GPT | 无需为这些背景步骤添加自动化 | 用户自行完成；商品任务直接在本对话继续 |
-| 登录智赢、读取采集商品 | `credentials-save` 隐藏输入并本地加密保存；`login` 取得 CLI 会话；`collected-product-live-get` 读取指定商品 | 实账户登录和 TCP 商品读写仍需验证。按 [命令行登录](login.md) 与 [TCP 接口](collected-product-api.md) 执行 |
+| 登录智赢、读取商品 | `login-native` 使用原生窗口并保护会话；终端可用 `credentials-save` 与 `login`；“我的产品”读 `product-live-get`，“产品采集”读 `collected-product-live-get` | 核对商品来源和真实编号。原生窗口及“我的产品”读取已验证，具体保存以当前任务读回为准；见 [命令行登录](login.md) 与 [TCP 接口](collected-product-api.md) |
 | 速卖通登录、按单量搜索、采集到智赢 | 尚无已验证的搜索、排序、采集 CLI | 由用户完成采集，提供智赢商品编号、来源链接和可售变体。需要自动化时先核验正常授权的 API、字段及采集结果，不能由扩展路由名猜调用 |
 | 补重量、包装尺寸和英文资料 | `erp-draft-preview` 读取包装数据、仅补缺失的估算；文案按 [Listing 流程](listing-workflow.md) 生成并用 `listing-copy-check` 检查 | 提供型号、原始描述、清晰照片、实际可售组合与件数；记录包装估算依据。当前 TCP 编辑命令未接入 `sale_weight`、`sale_size` 保存，审核值由人工回填 |
 | 查运费、阿里巴巴进货价、算渠道售价 | `pricing-quote --file pricing-input.json` 从明确单件成本、单件运费、费用和利润目标计算，并取 `.49/.89/.99` 尾数 | 用户提供匹配商品和采购数量的进货报价、按实际目的地/渠道得到的单件运费、费用、币种/汇率及利润目标。定价表和报价 API 未核验时使用明确输入；见 [本地定价](pricing.md) |
-| 完善各变体加价、文案和图片 | `collected-product-edit` 改本地快照；`collected-product-live-edit` 按唯一 `key` 改加价、指定英文文案并读回；图片按 [图片流程](listing-images.md) 制作 | 实际变体 `key`、现有 `money`、审核目标和商品素材。图片上传、绑定子体及渠道最终售价换算尚无已验证 API |
+| 完善各变体加价、文案和图片 | `collected-product-edit` 改本地快照；“我的产品”用 `product-live-edit`，“产品采集”用 `collected-product-live-edit`，均按唯一 `key` 改加价、指定英文文案并读回；图片按 [图片流程](listing-images.md) 制作 | 实际变体 `key`、现有 `money`、审核目标和商品素材。图片上传、绑定子体及渠道最终售价换算尚无已验证 API |
 | 检查品牌和侵权词 | `listing-copy-check` 检查五字段、已列品牌及常见原厂/官方/授权暗示；图片逐张核对文字、Logo 和商品一致性 | 将来源与素材中实际发现的品牌传入 `blocked_brands` 或 `--blocked-brand`。文字检查通过只证明已覆盖的规则，不证明商品身份、图片或类目全部合格 |
 
 `login` 仅登录智赢桌面 ERP。它不建立速卖通会话，也不取得 Amazon 卖家授权。Amazon 的 `listing-get`、`listing-preview`、`fba-inventory` 与报告命令另需 [SP-API 配置](sp-api.md)；`listing-preview` 只做刊登预检，现有命令未发布商品。

@@ -26,7 +26,7 @@
 | `ZYing.MLogin.OnLoad(EventArgs)` | 133496 |
 | `ZYing.MLogin.OnVisibleChanged(EventArgs)` | 133892 |
 | `ZYing.MLogin.登录()` → `<登录>d__14.MoveNext` | 135384 |
-| `ZYing.MLogin.验证()` → `<验证>d__15.MoveNext` | 136148 |
+| `ZYing.MLogin.验证()` → `<验证>d__16.MoveNext` | 136148 |
 | `ZYing.FlashForm.Start()` | 100408 |
 
 确认能否在独立 .NET 6 Windows Desktop/STA 宿主直接调用 `Application.Run(Global.ShowLogin())`，需要先设置哪些 `AppConfig/Global/UI` 项，成功后如何接收通知而不强制创建整个分销主窗口。也查 `ZYing.Program.Main` 是否存在命令行参数、单实例 IPC、窗口消息、插件回调或其他入口，可以让现有进程显示 `MLogin.Instance`。不要为了呼出登录清空已有账户或修改保存密码配置。
@@ -48,7 +48,9 @@
 
 “我的产品”构造 Sale 时前缀是 `sale`，所以使用 `sale.detail`；“产品采集”前缀是 `spider`。此前对“我的产品”编号调用 `spider.detail` 的已认证响应 root 为零行。当前解析支持普通数组和分页对象的 `data` 数组，对空记录明确返回 `product_not_found`，仍核对单行与 sale_id。`Record.ToJson` 不需手工重置游标。
 
-最小提交字段和保存后的审核状态另有任务：商品 `951393413` 的两个变体各加价 `0.01`，英文介绍追加 `*`。本次尚未写入。登录和只读详情确认之前不要用保存测试接口。
+保存路径已补正：CLI 外层和详情查询参数仍为 `id`，实际传给 `bBge` 的 outgoing Record 使用 `sale_id(Int32)`。状态机的另一份 callback Record 使用 `id`，只用于保存后的本地 `ISource.Update/Insert`；`thumb/cost/title` 也属于回调，不应猜测补入线上字段。执行器保持同源流程：`sale.detail → sale.update → sale.detail`，或 `spider.detail → spider.update → spider.detail`。
+
+“我的产品”用 `product-live-edit`，产品采集用 `collected-product-live-edit`。完整 `sale_stock` 只修改已选变体，完整 `sale_intro` 只修改指定语言；最小载荷的服务器接受情况和其他状态变化以当前任务的授权保存、读回核验为准。不要重复执行结果未确认的加价或追加文字。
 
 ## 交付格式
 

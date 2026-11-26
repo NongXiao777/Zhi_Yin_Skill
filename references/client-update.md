@@ -18,7 +18,7 @@ pwsh -NoProfile -File scripts/native/Inspect.ps1 -AppDirectory "$env:LOCALAPPDAT
 
 从元数据和调用链核对：TCP 类型、服务器类型、默认登录服务器字段、命令字段、抑制弹窗/重试字段、整数发送方法、Record 数组发送方法、实际端点字段、关闭方法、键值参数编码方法、帧构建方法及交换状态字段。签名和调用用途应共同支持判断，混淆名称没有固定含义。
 
-常见稳定线索：`ZYing.ZResult` 的 `IsErr/Message/Result/RS`，`ZYing.Member.Token/UserID`，`ZYing.Data.Record` 和 `RecordSet`。普通登录通常是 `common.login`、`login_acc`、`login_pwd` 和 `ZYing.Safe.Encrypt(string)`；商品通常是 `spider.detail` 与 `spider.update`。这些是定位线索，仍应对当前 DLL 核验。`MLogin` 的登录异步状态机可以确认真实参数、默认服务器和登录前初始化；商品详情和提交异步状态机可以确认字段与命令。
+常见稳定线索：`ZYing.ZResult` 的 `IsErr/Message/Result/RS`，`ZYing.Member.Token/UserID`，`ZYing.Data.Record` 和 `RecordSet`。普通登录通常是 `common.login`、`login_acc`、`login_pwd` 和 `ZYing.Safe.Encrypt(string)`；“我的产品”是 `sale.detail/update`，“产品采集”是 `spider.detail/update`。这些是定位线索，仍应对当前 DLL 核验。`MLogin` 的登录异步状态机可确认真实参数、默认服务器和初始化；商品提交状态机可确认实际发出的 Record。应追踪 Record 对象来源，不能把本地列表回调的 `id` 与线上 Record 的 `sale_id` 混淆。
 
 参数或响应结构变化时，调整执行器和相关 Python 解析，而不只更换配置。编译使用 `Build.ps1`，缓存由 C# 源码哈希决定；配置文件每次读取，无需手工删除缓存。
 

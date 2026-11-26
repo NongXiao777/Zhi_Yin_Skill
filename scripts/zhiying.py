@@ -15,7 +15,7 @@ from pathlib import Path
 
 TRAFFIC_SORTS = ('source', 'sessions', 'units_ordered', 'unit_session_percentage')
 COLLECTED_COMMANDS = ('collected-product-get', 'collected-product-edit')
-LIVE_COLLECTED_COMMANDS = ('collected-product-live-get', 'collected-product-live-edit', 'product-live-get')
+LIVE_COLLECTED_COMMANDS = ('collected-product-live-get', 'collected-product-live-edit', 'product-live-get', 'product-live-edit')
 WINDOW_COMMANDS = ('window-status', 'window-focus')
 
 
@@ -258,6 +258,7 @@ def add_collected_commands(commands):
     commands.add_parser(LIVE_COLLECTED_COMMANDS[1], parents=[remote, edits],
                         help='update through an authorized transport and read back the result')
     commands.add_parser('product-live-get', parents=[remote], help='read a My Products record through the authorized sale.detail transport')
+    commands.add_parser('product-live-edit', parents=[remote, edits], help='update a My Products record through sale.update and verify by reading it back')
 
 
 def add_collected_edit_options(edit):
@@ -382,7 +383,7 @@ def main():
             from collected_products import collected_result, encode_json
             from collected_transport import live_result
             if args.action in LIVE_COLLECTED_COMMANDS:
-                result = live_result(args, edit=args.action == 'collected-product-live-edit')
+                result = live_result(args, edit=args.action in ('collected-product-live-edit', 'product-live-edit'))
             else:
                 result = collected_result(args, edit=args.action == 'collected-product-edit')
             print(encode_json(result))
