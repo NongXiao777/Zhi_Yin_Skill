@@ -1,8 +1,8 @@
-# 采集商品接口与原生 TCP 执行器
+# 商品接口与原生 TCP 执行器
 
-核验日期：2026-11-25。通过 IDA Pro MCP 和离线 .NET 元数据/IL 分析，检查了 `ZYing.User.dll`、`ZYing.Work.dll`、`ZYing.Core.dll`、`ZYing.UI.dll` 及智赢扩展 5.2.4。用户补充的脱敏分析所列 DLL 与当前安装版哈希不同。按安装版本核对混淆符号和字段映射。
+核验日期：2026-11-26。通过 IDA Pro MCP、离线 .NET 元数据/IL 分析及原生回环测试，检查了 `ZYing.User.dll`、`ZYing.Work.dll`、`ZYing.Core.dll`、`ZYing.UI.dll` 及智赢扩展 5.2.4。混淆符号按 `client-profiles.json` 中的 DLL 哈希匹配。
 
-**线上读写仍待验证。** 本机已确认当前智赢进程以普通权限运行，CLI 能识别进程，当时未发现进程监听的本地 TCP 端口。扩展 5.2.4 和已查看的厂商公开文档没有提供这些操作的授权接入方式。下面保留静态证据。本地文件工作流见 [商品预览](erp-products.md)。
+原生窗口登录、加密会话交接及“我的产品”只读查询已验证。保存必须按当前任务授权执行，并通过同一来源的详情查询读回确认。下面区分两类商品来源、进程间请求和原生线上 Record；本地文件工作流见 [商品预览](erp-products.md)。
 
 ## 命令行接入
 
@@ -14,16 +14,25 @@ python scripts/zhiying.py collected-transport-probe
 
 该命令创建合成会话，验证原生组件加载和请求编码，返回 `network_requests_sent: 0`。原生回环测试还验证了五字节 TCP 包头和后续请求体，实际捕获了 `spider.detail` 和测试编号。真实记录仍需正常有效的登录会话。
 
-会话由本地 `ZHIYING_SESSION_FILE` 指向的 JSON 提供，文件路径可使用 Git 已忽略的 `*.local.json`。字段为实际 `server_address`（IP）、`server_port`（整数）、`token`（正常登录取得的 GUID），以及可选的实际 `user_id`。凭据由执行器在本地读取。人工登录后的 `ZYing.Member.Token` 位于客户端进程内，目前未确认自动生成会话文件，导出入口仍待核实。
+运行 `login-native`，或终端输入的 `login --saved` / `login --remember` 成功后，会话自动以当前用户 DPAPI 加密保存在 `%LOCALAPPDATA%\ZhiYingSkill\session.dpapi`，业务命令自动发现。也可用 `ZHIYING_SESSION_FILE` 指定文件；会话包含实际 `server_address/server_port/token/user_id`，并可保存 `device_id/exchange_state`。见 [命令行登录](login.md)。常规入口使用原生窗口宿主，已有桌面进程的定向会话读取仍是诊断路径。
 
 也可通过 `--transport` 指定另一个执行器，或设置 `ZHIYING_COLLECTED_TRANSPORT`。它遵循下方进程间契约。
 
-当前版本的登录状态机发送 `common.login`，使用 `login_acc` 和 `login_pwd` 等表单列。代码中还有密码编码、数字登录号和强制改密码分支，完整登录请求仍待核对。`ZYing.Member.Parse(Record)` 负责写入会话 `Token`，它由 `ZYing.MPush.Deal` 调用。这些是登录流程定位，实账户的登录和会话交接仍待验证。
+普通手机号登录使用 `common.login`，提交 `login_acc` 和 `ZYing.Safe.Encrypt` 编码后的 `login_pwd`。原生窗口宿主在成功后保存自己的实际会话字段；`login-probe` 只作离线编码核验，额外验证和强制改密码不能视为成功。
+
+| 商品来源 | 读取命令 | 保存命令 | 原生 RPC |
+|---|---|---|---|
+| 我的产品 | `product-live-get` | `product-live-edit` | `sale.detail` / `sale.update` |
+| 产品采集 | `collected-product-live-get` | `collected-product-live-edit` | `spider.detail` / `spider.update` |
+
+同一编号在另一来源表可能没有记录。先核对用户打开的页面和详情编号，再选择命令；保存前、基线检查和保存后的读回必须使用同一来源。
 
 ```powershell
 python scripts/zhiying.py collected-product-live-get --product-id 954521907 --include-copy
 python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --set-surcharge EXACT_KEY 1.00
 python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --copy-file copy.json
+python scripts/zhiying.py product-live-get --product-id 951393413 --include-copy
+python scripts/zhiying.py product-live-edit --product-id 951393413 --set-surcharge EXACT_KEY 1.00
 ```
 
 先读回记录并核对真实变体键。执行器经标准输入接收一个 UTF-8 JSON 对象，经标准输出返回一个 UTF-8 JSON 对象。凭据由执行器使用正常授权方式管理。
@@ -33,11 +42,21 @@ python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --c
 | `{"command":"spider.detail","id":954521907}` | `{"ok":true,"record":{...}}`。返回同一 `sale_id` 及现有语言和完整变体集合 |
 | `{"command":"spider.update","id":954521907,"expected":{...},"fields":{...}}` | 校验 `expected` 中将要更改的字段基线，只保存 `fields` 中的字段。成功返回 `{"ok":true}`，冲突返回 `{"ok":false,"error":"conflict"}` |
 
-上表定义 CLI 到执行器的请求。内置执行器已调用当前客户端编码器，并在保存前重新读取对比基线。服务端对会话和最小更新范围的接受情况仍待实账户核验。服务端原子条件更新能力未知，并发写入时应协调编辑时段。CLI 更新后会再次调用 `spider.detail`，逐个对比提交字段，只有匹配时才返回 `remote_read_back_verified: true`。若保存结果不明或读回失败，先重新读取现状。
+上表定义 CLI 到执行器的请求，外层 `id` 保持不变；“我的产品”使用相同结构，将命令换成 `sale.detail` / `sale.update`。执行器把更新编码成厂商 Record 时，标识列必须是 **`sale_id(Int32)`**，然后加入变化的 `sale_intro/sale_stock` 等字段。详情查询参数仍叫 `id`。
+
+内置执行器调用当前客户端编码器，在保存前重新读取对比基线。服务端原子条件更新能力未知，并发写入时应协调编辑时段。CLI 更新后调用对应来源的详情命令，逐个对比提交字段，只有匹配时才返回 `remote_read_back_verified: true`。若保存结果不明或读回失败，先重新读取现状。
 
 当前安装版的五个原生字段已通过独立加载 User 程序集、求值 `GetTitle/GetBrief/GetKeys/GetBullet/GetIntro` 的字符串参数核实。CLI 直接读取并更新原字段，保留其他语言。兼容已有执行器返回的 `listing_copy` 映射。`sale_en` 保留报关英文简称用途。示例见 [修改标题与其他文案](erp-products.md#修改标题与其他文案)。
 
-内置执行器按已核实的 Work 程序集 SHA256 匹配当前混淆符号。版本变化会返回 `unsupported_client_version`，需重新核对符号再更新。当前类型为 `ze53.Fe5b`，命令字段 `tei4`，详情方法 `lenP(string,int)`，记录提交方法 `Ren4(Record[])`。这些符号只适用于已匹配版本。
+内置执行器按 `scripts/native/client-profiles.json` 中的 Work/Core/User SHA256 匹配已核验符号。版本变化会返回 `unsupported_client_version`；按 [客户端更新现场修复](client-update.md) 检查并验证新配置。2026-11-26 16:28 版使用 `cBSF.ABSs`，历史版符号保留在各自配置内。
+
+两个变体可以一起增加加价并追加英文介绍，真实键先从详情读取：
+
+```powershell
+python scripts/zhiying.py product-live-edit --product-id 951393413 --adjust-surcharge KEY1 0.01 --adjust-surcharge KEY2 0.01 --append-intro "*"
+```
+
+增量和追加不是幂等操作。结果不明时先读现状，确认前不能重复执行。`transport_calls: 3` 指三个子进程调用；原生保存前另读一次基线，正常实际网络请求为四次。读回只验证提交字段，其他服务端状态需额外检查。
 
 ## 已有采集商品详情
 
@@ -67,7 +86,7 @@ ZYing.User.dll
 
 | 内容 | 字段 | 已确认语义 |
 |---|---|---|
-| 商品编号 | `sale_id` | 商品记录编号；详情查询参数名为 `id` |
+| 商品编号 | `sale_id` | 商品记录编号，也是原生保存 Record 的标识列；详情查询及 CLI 外层参数名为 `id` |
 | 商品标题 | `sale_title` | 多语言 JSON 字符串 |
 | 短标题 | `sale_brief` | 多语言 JSON 字符串 |
 | 要点说明 | `sale_bullet` | 多语言 JSON 字符串，英文按换行组织 |
@@ -112,20 +131,22 @@ Sale.SetIntro(text, "en") → ETabMulti.Set("sale_intro", text, "en")
 
 Sale.<btnSubmit_Click>d__81.MoveNext()
   → EContainer.GetRecord()
-  → 附加 id、sale_stock、图片等字段
-  → Ia3D.La3e.HaF1 = "spider.update"
-  → Ia3D.La3e.za3r(new Record[] { data })
+  → 在线 Record 附加 sale_id(Int32)、sale_stock、图片等字段
+  → cBSF.ABSs.VBeV = HE7G + ".update"（sale 或 spider 来源）
+  → cBSF.ABSs.bBge(new Record[] { outgoing })
   → RecordSet 编码 / TCP 请求
-  → 成功返回后 ISource.Update(...) 更新客户端列表
+  → 成功返回后 ISource.Update(callback) 更新客户端列表
 ```
 
 `SetIntro` 只修改内存表单。提交时仍发送保留其他语言的完整 `sale_intro` 字符串。改单个变体应先读取完整集合，唯一定位 `key`，只改目标 `money`，保留其他变体后重新编码整个 `sale_stock`。
 
-UI 文字控件比较 `Origin` 或旧 `NMulti` 的内容；默认 `Always=false`，未变字段会省略。更准确的提交范围是变化/Always 字段加上 User 提交处理器显式添加的字段，不是无条件发送整个商品。
+该状态机有两个不同 Record：`EContainer.GetRecord()` 得到的 outgoing 传给 `bBge`；另一个 callback 只传给本地 `ISource.Update/Insert`。`id/thumb/cost/title` 等回调字段不能据此加入线上请求。此前把 callback 的 `id` 当作线上标识会导致错误的保存载荷。
 
-Core 编码层能构造少量列，例如 `id(Int32)` 加 `sale_stock(String)` 或 `sale_intro(String)`；**服务端是否接受这些最小列集合尚未验证**。不能把只序列化一个变体的数组当作单变体远程更新。
+UI 文字控件比较 `Origin` 或旧 `NMulti` 的内容；默认 `Always=false`，未变字段会省略。提交范围是变化/Always 字段加上 User 提交处理器显式添加的字段，不是无条件发送整个商品。
 
-`<Load>d__47` 的 `version` 来自界面请求计数，用于避免旧响应覆盖新页面，不是服务器行版本。未发现它作为保存参数传出；其他服务端并发要求仍未知。表单可包含审核状态等字段，且服务端实现不可见，不能保证 `spider.update` 不触发状态、同步或发布副作用。
+Core 编码层能构造少量列，例如 `sale_id(Int32)` 加 `sale_stock(String)` 和 `sale_intro(String)`；服务端是否接受某组最小列、是否改变其他状态，须由授权保存及读回核验。不能把只序列化一个变体的数组当作单变体远程更新。
+
+`<Load>d__47` 的 `version` 来自界面请求计数，用于避免旧响应覆盖新页面，不是服务器行版本。未发现它作为保存参数传出；其他服务端并发要求仍未知。表单可包含审核状态等字段，且服务端实现不可见；保存后除提交字段外，另读回比较可见状态和其他变化。
 
 ## 浏览器扩展的接口边界
 
@@ -144,4 +165,6 @@ Core 编码层能构造少量列，例如 `id(Int32)` 加 `sale_stock(String)` �
 
 ## 真实接口验收
 
-取得受支持的接入方式后，先读实账户里的采集商品并核对编号、币种、变体键、原加价和英文介绍。按授权范围验证更新范围和可能的状态变化。以一次只改目标字段的保存开始，重新查询确认值和其他语言、变体，再按原值恢复并重新读回。自动化测试覆盖本地快照、执行器契约和当前安装版的原生加载及回环发包。真实验收以授权 TCP 执行器返回的商品和保存后读回为准。
+2026-11-26 已用当前客户端验证“我的产品”的最小保存载荷：`sale_id` 加完整 `sale_stock/sale_intro`，仅改两个目标加价及英文介绍末尾一个字符。保存、同源读回及按原值还原均成功；完整 180 个变体保持预期，其他字段仅 `sale_log` 操作日志变化。桌面显示曾晚于服务器读回，稍等并刷新可见；不能因界面暂未更新重复提交。该结果不代表图片、状态或其他来源的保存已验证。
+
+先通过当前已授权会话和正确来源读商品，核对编号、币种、变体键、原加价和英文介绍。保存前留存基线，只改用户授权的字段；保存后确认完整语言、变体集合及可见状态。是否恢复按用户任务决定。自动化测试覆盖本地快照、执行器契约和当前安装版的原生加载及回环发包；真实验收以授权 TCP 执行器返回的商品和保存后读回为准。

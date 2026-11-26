@@ -1,0 +1,9 @@
+{
+  "currency": "USD",
+  "unit_cost": "10.00",
+  "shipping_cost": "2.00",
+  "packaging_cost": "0.50",
+  "other_cost": "0.50",
+  "platform_fee_rate": "0.15",
+  "target_profit": "4.00"
+}

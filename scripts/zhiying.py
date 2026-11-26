@@ -15,8 +15,9 @@ from pathlib import Path
 
 TRAFFIC_SORTS = ('source', 'sessions', 'units_ordered', 'unit_session_percentage')
 COLLECTED_COMMANDS = ('collected-product-get', 'collected-product-edit')
-LIVE_COLLECTED_COMMANDS = ('collected-product-live-get', 'collected-product-live-edit')
+LIVE_COLLECTED_COMMANDS = ('collected-product-live-get', 'collected-product-live-edit', 'product-live-get', 'product-live-edit')
 WINDOW_COMMANDS = ('window-status', 'window-focus')
+PLAN_COMMANDS = ('product-plan', 'product-plan-show', 'product-apply', 'product-restore')
 
 
 def emit(value):
@@ -257,6 +258,21 @@ def add_collected_commands(commands):
     commands.add_parser(LIVE_COLLECTED_COMMANDS[0], parents=[remote], help='read through an authorized transport')
     commands.add_parser(LIVE_COLLECTED_COMMANDS[1], parents=[remote, edits],
                         help='update through an authorized transport and read back the result')
+    commands.add_parser('product-live-get', parents=[remote], help='read a My Products record through the authorized sale.detail transport')
+    commands.add_parser('product-live-edit', parents=[remote, edits], help='update a My Products record through sale.update and verify by reading it back')
+    plan = commands.add_parser('product-plan', parents=[remote, edits],
+                               help='read a product and save a persistent edit plan without submitting')
+    plan.add_argument('--namespace', choices=('sale', 'spider'), required=True)
+    plan.add_argument('--output', type=Path, required=True)
+    show = commands.add_parser('product-plan-show', help='validate and show the actual changes and submission state')
+    show.add_argument('--plan', type=Path, required=True)
+    transport = argparse.ArgumentParser(add_help=False)
+    transport.add_argument('--transport', type=Path)
+    transport.add_argument('--transport-arg', action='append', default=[])
+    for name, help_text in [('product-apply', 'submit a prepared plan once and read back'),
+                            ('product-restore', 'restore planned targets while retaining independent edits')]:
+        command = commands.add_parser(name, parents=[transport], help=help_text)
+        command.add_argument('--plan', type=Path, required=True)
 
 
 def add_collected_edit_options(edit):
@@ -266,6 +282,7 @@ def add_collected_edit_options(edit):
                       help='add a signed delta to money for an exact variant key, repeatable')
     edit.add_argument('--minimum-channel-price', help='quote a price ending in .49, .89 or .99 at or above this amount')
     edit.add_argument('--intro-file', type=Path, help='new English introduction as UTF-8 text')
+    edit.add_argument('--append-intro', metavar='TEXT', help='append exact text to the existing English introduction')
     edit.add_argument('--copy-file', type=Path, help='UTF-8 JSON with the English listing fields to replace')
     edit.add_argument('--blocked-brand', action='append', default=[], help='brand name to exclude, repeatable')
 
@@ -327,6 +344,7 @@ def main():
     import erp_products
     import listing_copy
     import sp_api
+    from login import LOGIN_COMMANDS, add_login_commands, login_result
 
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
@@ -335,6 +353,7 @@ def main():
     parser.add_argument('--extension', type=Path,
                         default=Path(os.environ.get('LOCALAPPDATA', '.')) / 'ZYing' / 'zying-ext.crx')
     commands = parser.add_subparsers(dest='action', required=True)
+    add_login_commands(commands)
     commands.add_parser('status', help='inspect local ZYing installation and processes')
     commands.add_parser('launch', help='start the installed ZYing client')
     commands.add_parser('collected-transport-probe', help='load native TCP components and encode an offline request')
@@ -347,6 +366,8 @@ def main():
     report_parser = commands.add_parser('traffic-summary', help='summarize a local Sales and Traffic JSON')
     report_parser.add_argument('--file', type=Path, required=True)
     add_traffic_options(report_parser)
+    pricing_parser = commands.add_parser('pricing-quote', help='quote .49/.89/.99 selling prices from explicit local costs and a profit target')
+    pricing_parser.add_argument('--file', type=Path, required=True, help='local pricing input JSON; all amounts use one currency')
     add_erp_commands(commands)
     add_collected_commands(commands)
     copy_check = commands.add_parser('listing-copy-check', help='check Amazon.com text and optionally map ERP fields')
@@ -358,7 +379,9 @@ def main():
     args.app = args.app.resolve()
     args.extension = args.extension.resolve()
     try:
-        if args.action == 'status':
+        if args.action in LOGIN_COMMANDS:
+            result = login_result(args)
+        elif args.action == 'status':
             result = status(args.app, args.extension)
         elif args.action == 'launch':
             result = launch(args.app, args.extension)
@@ -370,17 +393,31 @@ def main():
         elif args.action == 'collected-transport-probe':
             from collected_transport import native_probe
             result = native_probe(args.app)
+        elif args.action in PLAN_COMMANDS:
+            from product_plans import create_plan, inspect_plan, apply_plan, restore_plan
+            from collected_transport import transport_command
+            if args.action == 'product-plan-show':
+                result = inspect_plan(args.plan)
+            else:
+                transport = transport_command(args)
+                if args.action == 'product-plan':
+                    result = create_plan(transport, args.product_id, args.namespace, args, args.output)
+                else:
+                    result = (apply_plan if args.action == 'product-apply' else restore_plan)(transport, args.plan)
         elif args.action in (*COLLECTED_COMMANDS, *LIVE_COLLECTED_COMMANDS):
             from collected_products import collected_result, encode_json
             from collected_transport import live_result
             if args.action in LIVE_COLLECTED_COMMANDS:
-                result = live_result(args, edit=args.action == 'collected-product-live-edit')
+                result = live_result(args, edit=args.action in ('collected-product-live-edit', 'product-live-edit'))
             else:
                 result = collected_result(args, edit=args.action == 'collected-product-edit')
             print(encode_json(result))
             return 0
         elif args.action == 'traffic-summary':
             result = traffic_summary(args.file, args.limit, **traffic_options(args))
+        elif args.action == 'pricing-quote':
+            from pricing import pricing_quote
+            result = pricing_quote(args.file)
         elif args.action in ('erp-product-get', 'erp-draft-preview'):
             result = erp_products.product_result(args, preview=args.action == 'erp-draft-preview')
         elif args.action == 'listing-copy-check':
@@ -403,11 +440,15 @@ def main():
         return 1
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired, zipfile.BadZipFile, KeyError,
             TypeError, AttributeError):
-        if args.action in ('status', 'launch', 'routes', 'collected-transport-probe', *WINDOW_COMMANDS):
+        if args.action in LOGIN_COMMANDS:
+            message = 'Could not complete the login command. Check the client installation and local protected files.'
+        elif args.action in ('status', 'launch', 'routes', 'collected-transport-probe', *WINDOW_COMMANDS):
             message = 'Probe failed. Verify the installation, package path and Windows process access.'
-        elif args.action in ('traffic-summary', 'listing-preview', 'erp-product-get', 'erp-draft-preview',
+        elif args.action in ('traffic-summary', 'pricing-quote', 'listing-preview', 'erp-product-get', 'erp-draft-preview',
                              'listing-copy-check', *COLLECTED_COMMANDS, *LIVE_COLLECTED_COMMANDS):
             message = 'Could not process the input. Check the file path, JSON contents and command options.'
+        elif args.action in PLAN_COMMANDS:
+            message = 'Could not process the product plan. Inspect its saved state before another write.'
         else:
             message = 'Could not process the Amazon response.'
         emit({'ok': False, 'error': message})

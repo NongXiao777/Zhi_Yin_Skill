@@ -133,6 +133,21 @@ def intro_text(path, blocked_brands):
     return text
 
 
+def appended_intro(existing, suffix, blocked_brands):
+    if not isinstance(existing, str) or not existing.strip():
+        raise ProductError('An existing nonempty English introduction is required for --append-intro')
+    if not isinstance(suffix, str) or not suffix or '\0' in suffix:
+        raise ProductError('Provide nonempty text without null characters for --append-intro')
+    text = existing + suffix
+    if len(text.encode('utf-8')) > INTRO_LIMIT:
+        raise ProductError('Appended English introduction exceeds 250 KB')
+    blocked = {words_only(brand) for brand in blocked_brands} - {''}
+    issues = brand_issues(text, blocked)
+    if issues:
+        raise ProductError('English introduction failed checks: ' + ', '.join(issues))
+    return text
+
+
 def copy_updates(path, blocked_brands):
     copy, source_brands, status = load_copy(path, partial=True)
     if status == 'HOLD':
@@ -219,6 +234,11 @@ def record_result(args, product_id, record, *, edit=False, live=False):
             if DESCRIPTION in updates:
                 raise ProductError('Supply the English description through one option')
             updates[DESCRIPTION] = intro_text(args.intro_file, args.blocked_brand)
+        append = getattr(args, 'append_intro', None)
+        if append is not None:
+            if DESCRIPTION in updates:
+                raise ProductError('Supply the English description through one option')
+            updates[DESCRIPTION] = appended_intro(intro.get('en'), append, args.blocked_brand)
         edits = [(key, value, False) for key, value in args.set_surcharge]
         edits.extend((key, value, True) for key, value in args.adjust_surcharge)
         if not edits and not updates and args.minimum_channel_price is None:

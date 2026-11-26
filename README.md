@@ -4,10 +4,15 @@
 
 | 命令 | 操作 |
 |---|---|
+| `credentials-save` / `credentials-status` | 在终端录入隐藏密码并加密保存，或只检查保存状态 |
+| `login-native` / `login` / `login-probe` / `login-status` | 呼出厂商登录窗口，或终端账号密码登录；离线编码检查、检查会话文件 |
+| `pricing-quote` | 按明确进货、运费、包材、其他成本、费率和利润目标计算 .49/.89/.99 渠道报价 |
 | `status` / `launch` / `routes` | 检查或启动智赢，查看扩展中的命令定义 |
 | `window-status` / `window-focus` | 按明确请求检查现有窗口或切到前台 |
 | `collected-transport-probe` | 无窗口加载原生 TCP 组件并验证请求编码 |
-| `collected-product-live-get` / `collected-product-live-edit` | 通过原生或自定义 TCP 执行器读取价格和文案、修改加价或选定文案并读回 |
+| `product-live-get` / `product-live-edit` | 通过 `sale.detail/update` 读取或保存“我的产品”，并读回核验 |
+| `product-plan` / `product-plan-show` / `product-apply` / `product-restore` | 保存实际改动计划、提交前持久化意图、防并发重放、按目标还原并保留无关编辑 |
+| `collected-product-live-get` / `collected-product-live-edit` | 通过 `spider.detail/update` 读取或保存“产品采集”，并读回核验 |
 | `collected-product-get` / `collected-product-edit` | 读本地采集商品快照，预览并保存英文文案和指定变体的加价 |
 | `erp-product-get` | 从本地商品表按产品编号或父 SKU 选取商品和变体 |
 | `erp-draft-preview` | 预填包装毛重和尺寸，批量试算变体加价并保存审阅稿 |
@@ -20,6 +25,10 @@
 
 ## 本地使用
 
+从采集到包装、定价、文案与图片回填，按 [操作流程](references/operation-workflow.md) 检查当前入口和未核验的接口。原定价表未知时，可用 [明确成本报价](references/pricing.md) 与合成 JSON 示例建立计算输入。
+
+呼出厂商原生登录窗口可运行 `python scripts/zhiying.py login-native`，用户在窗口内输入密码，成功后宿主保护会话并关闭。终端输入可用 `credentials-save` 后 `login --saved`，或 `login --remember`。业务命令自动读取本地加密会话；原生窗口登录和“我的产品”只读查询已验证。参见 [命令行登录](references/login.md)。
+
 ```powershell
 python scripts/zhiying.py status
 python scripts/zhiying.py routes --match amazon --limit 5
@@ -31,7 +40,7 @@ python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --b
 
 示例使用合成数据。实际报告可放在 Git 忽略的 `reports/` 目录。以关键词 `--help` 查看每条命令的参数。默认优先使用 `%LOCALAPPDATA%\Programs\ZYing\ZYing.exe`，不存在时检查 `D:\ZYing\ZYing.exe`，扩展路径为 `%LOCALAPPDATA%\ZYing\zying-ext.crx`。可在子命令前使用 `--app` 和 `--extension` 指定其他路径。`launch` 返回的是初次观察到的进程状态。
 
-商品表支持 CSV、TSV、JSON 和 XLSX。采集商品 JSON 可按变体键更新加价、更新英文介绍并保存到新文件。列名、单位和定价规则见 [ERP 商品预览](references/erp-products.md)。内置 TCP 执行器已通过当前安装版的组件和回环发包核验，需要 PowerShell 7、.NET 6 Desktop Runtime 和正常登录会话。实账户读写仍待验证。见 [采集商品接口记录](references/collected-product-api.md)。
+商品表支持 CSV、TSV、JSON 和 XLSX。商品 JSON 可按变体键更新加价、更新英文介绍并保存到新文件。列名、单位和定价规则见 [ERP 商品预览](references/erp-products.md)。内置 TCP 执行器需要 PowerShell 7、.NET 6 Desktop Runtime 和正常登录会话；保存必须核对来源、唯一变体键和读回结果。原生线上 Record 的标识为 `sale_id`，CLI 外层和详情参数仍为 `id`。见 [商品接口记录](references/collected-product-api.md)。
 
 商品介绍缺失时，按 [Amazon.com 文案流程](references/listing-workflow.md) 先核验并生成缺失内容，再用 `listing-copy-check` 检查。主图、场景图、细节图和尺寸图的制作边界见 [商品图片](references/listing-images.md)。
 

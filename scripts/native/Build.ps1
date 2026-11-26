@@ -1,10 +1,12 @@
 param(
     [Parameter(Mandatory=$true)][string]$AppDirectory,
-    [string]$OutputDirectory
+    [string]$OutputDirectory,
+    [string]$SourceFile = 'NativeTransport.cs'
 )
 $ErrorActionPreference='Stop'
 try {
-    $sourcePath=Join-Path $PSScriptRoot 'NativeTransport.cs'
+    if($SourceFile -notin @('NativeTransport.cs','NativeLoginHost.cs')){throw 'Unsupported native helper source'}
+    $sourcePath=Join-Path $PSScriptRoot $SourceFile
     $source=Get-Content -Raw -LiteralPath $sourcePath
     $dotnet=(Get-Command dotnet -ErrorAction Stop).Source
     $shared=Join-Path ([IO.Path]::GetDirectoryName($dotnet)) 'shared'

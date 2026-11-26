@@ -117,6 +117,66 @@ class CollectedProductTests(unittest.TestCase):
         self.assertIn('brand_affiliation_language', result['error'])
         self.assertFalse(self.output.exists())
 
+    def test_append_and_two_surcharge_changes_preserve_exact_intro_and_other_data(self):
+        before_text = '  Original <p>description</p>\r\n'
+        self.record['sale_intro'] = json.dumps({'en': before_text, 'zh': '中文'}, ensure_ascii=False)
+        self.write_record()
+        original = self.source.read_bytes()
+        result = self.cli('collected-product-edit', '--adjust-surcharge', '12V', '0.01',
+                          '--adjust-surcharge', '24V', '0.01', '--append-intro', '*',
+                          '--include-intro', '--output', self.output)
+        self.assertTrue(result['local_read_back_verified'])
+        self.assertEqual(result['intro_en'], before_text + '*')
+        self.assertEqual(result['variant_changes'], [
+            {'key': '12V', 'old_money': '0.3', 'new_money': '0.31'},
+            {'key': '24V', 'old_money': '0.2', 'new_money': '0.21'}])
+        saved = json.loads(self.output.read_text(encoding='utf-8'))['root']
+        self.assertEqual(json.loads(saved['sale_intro']), {'en': before_text + '*', 'zh': '中文'})
+        before = json.loads(self.record['sale_stock'], parse_float=Decimal)
+        after = json.loads(saved['sale_stock'], parse_float=Decimal)
+        self.assertEqual(after, [{**before[0], 'money': Decimal('0.31')},
+                                 {**before[1], 'money': Decimal('0.21')}])
+        self.assertEqual(saved['unaffected'], self.record['unaffected'])
+        self.assertEqual(self.source.read_bytes(), original)
+
+    def test_append_rejects_missing_english_instead_of_creating_a_marker_description(self):
+        for existing in ({'zh': '中文'}, {'en': ''}, {'en': ' \n'}):
+            with self.subTest(existing=existing):
+                self.record['sale_intro'] = existing
+                self.write_record()
+                result = self.cli('collected-product-edit', '--append-intro', '*',
+                                  '--output', self.output, expected=1)
+                self.assertIn('existing nonempty English introduction', result['error'])
+                self.assertFalse(self.output.exists())
+
+    def test_append_conflicts_with_replacement_but_can_accompany_other_copy_fields(self):
+        result = self.cli('collected-product-edit', '--append-intro', '*', '--intro-file', self.intro,
+                          '--output', self.output, expected=1)
+        self.assertIn('one option', result['error'])
+        self.intro.write_text(json.dumps({'product_description': 'Replacement description'}), encoding='utf-8')
+        result = self.cli('collected-product-edit', '--append-intro', '*', '--copy-file', self.intro,
+                          '--output', self.output, expected=1)
+        self.assertIn('one option', result['error'])
+        self.assertFalse(self.output.exists())
+        self.intro.write_text(json.dumps({'product_title': 'Compact DC Motor'}), encoding='utf-8')
+        result = self.cli('collected-product-edit', '--append-intro', '*', '--copy-file', self.intro,
+                          '--include-copy', '--output', self.output)
+        self.assertEqual(result['copy_en']['product_description'], 'Old description*')
+        self.assertEqual(result['copy_en']['product_title'], 'Compact DC Motor')
+
+    def test_append_checks_combined_byte_limit_nonempty_suffix_and_brands(self):
+        result = self.cli('collected-product-edit', '--append-intro', '', '--output', self.output, expected=1)
+        self.assertIn('nonempty text', result['error'])
+        result = self.cli('collected-product-edit', '--append-intro', ' Official Acme replacement.',
+                          '--blocked-brand', 'Acme', '--output', self.output, expected=1)
+        self.assertIn('blocked_brand', result['error'])
+        self.assertFalse(self.output.exists())
+        self.record['sale_intro'] = {'en': '字' * 83333}
+        self.write_record()
+        result = self.cli('collected-product-edit', '--append-intro', '字', '--output', self.output, expected=1)
+        self.assertIn('exceeds 250 KB', result['error'])
+        self.assertFalse(self.output.exists())
+
 
 if __name__ == '__main__':
     unittest.main()

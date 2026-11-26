@@ -4,5 +4,6 @@ __pycache__/
 .env
 .env.*
 *.local.json
+*.dpapi
 reports/
 work/
