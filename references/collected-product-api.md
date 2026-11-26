@@ -14,11 +14,11 @@ python scripts/zhiying.py collected-transport-probe
 
 该命令创建合成会话，验证原生组件加载和请求编码，返回 `network_requests_sent: 0`。原生回环测试还验证了五字节 TCP 包头和后续请求体，实际捕获了 `spider.detail` 和测试编号。真实记录仍需正常有效的登录会话。
 
-会话由本地 `ZHIYING_SESSION_FILE` 指向的 JSON 提供，文件路径可使用 Git 已忽略的 `*.local.json`。字段为实际 `server_address`（IP）、`server_port`（整数）、`token`（正常登录取得的 GUID），以及可选的实际 `user_id`。凭据由执行器在本地读取。人工登录后的 `ZYing.Member.Token` 位于客户端进程内，目前未确认自动生成会话文件，导出入口仍待核实。
+运行 `login --saved` 或 `login --remember` 成功后，会话自动以当前用户 DPAPI 加密保存在 `%LOCALAPPDATA%\ZhiYingSkill\session.dpapi`，业务命令自动发现。也可用 `ZHIYING_SESSION_FILE` 指定文件；明确指定的历史会话 JSON 仍支持 `server_address`、`server_port`、`token` 和可选 `user_id`。见 [命令行登录](login.md)。人工桌面登录与 CLI 会话是独立的，当前不会从桌面进程提取 token。
 
 也可通过 `--transport` 指定另一个执行器，或设置 `ZHIYING_COLLECTED_TRANSPORT`。它遵循下方进程间契约。
 
-当前版本的登录状态机发送 `common.login`，使用 `login_acc` 和 `login_pwd` 等表单列。代码中还有密码编码、数字登录号和强制改密码分支，完整登录请求仍待核对。`ZYing.Member.Parse(Record)` 负责写入会话 `Token`，它由 `ZYing.MPush.Deal` 调用。这些是登录流程定位，实账户的登录和会话交接仍待验证。
+2026-11-26 已补上普通手机号登录：`common.login` 提交 `login_acc` 和 `ZYing.Safe.Encrypt` 编码后的 `login_pwd`，沿用原生版本和设备标识。CLI 仅提取成功响应中的 `member.token`、`member.userid` 与实际 endpoint，加密保存后交给业务命令。`login-probe` 可离线核验；额外验证和强制改密码会停止。实账户的登录和商品读写仍待验证。
 
 ```powershell
 python scripts/zhiying.py collected-product-live-get --product-id 954521907 --include-copy
@@ -37,7 +37,15 @@ python scripts/zhiying.py collected-product-live-edit --product-id 954521907 --c
 
 当前安装版的五个原生字段已通过独立加载 User 程序集、求值 `GetTitle/GetBrief/GetKeys/GetBullet/GetIntro` 的字符串参数核实。CLI 直接读取并更新原字段，保留其他语言。兼容已有执行器返回的 `listing_copy` 映射。`sale_en` 保留报关英文简称用途。示例见 [修改标题与其他文案](erp-products.md#修改标题与其他文案)。
 
-内置执行器按已核实的 Work 程序集 SHA256 匹配当前混淆符号。版本变化会返回 `unsupported_client_version`，需重新核对符号再更新。当前类型为 `ze53.Fe5b`，命令字段 `tei4`，详情方法 `lenP(string,int)`，记录提交方法 `Ren4(Record[])`。这些符号只适用于已匹配版本。
+内置执行器按 `scripts/native/client-profiles.json` 中的 Work/Core/User SHA256 匹配已核验符号。版本变化会返回 `unsupported_client_version`；按 [客户端更新现场修复](client-update.md) 检查并验证新配置。2026-11-26 16:28 版使用 `cBSF.ABSs`，历史版符号保留在各自配置内。
+
+两个变体可以一起增加加价并追加英文介绍，真实键先从详情读取：
+
+```powershell
+python scripts/zhiying.py collected-product-live-edit --product-id 951393413 --adjust-surcharge KEY1 0.01 --adjust-surcharge KEY2 0.01 --append-intro "*"
+```
+
+增量和追加不是幂等操作。结果不明时先读现状，确认前不能重复执行。`transport_calls: 3` 指三个子进程调用；原生保存前另读一次基线，正常实际网络请求为四次。读回只验证提交字段，其他服务端状态需额外检查。
 
 ## 已有采集商品详情
 

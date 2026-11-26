@@ -1,0 +1,42 @@
+[
+  {
+    "core_sha256": "7AB55921D976D04DDB5163B5034764DB78B37A188276DCE44EC0E0924EC96F34",
+    "name": "2026-11-26-before-update",
+    "work_sha256": "034C95CC20C59037D6177FCB409B7D87AE975AF46C5A1805B10175DF9774C934",
+    "user_sha256": "54549276EF61C16CE46C62A88E54EE33A3EAC1B976411F2CD8E54B53044B1C49",
+    "rpc_type": "ze53.Fe5b",
+    "server_type": "ze53.Fe5b+IK7o",
+    "login_server_field": "TeD7",
+    "command_field": "tei4",
+    "interactive_field": "AeiX",
+    "send_id_method": "lenP",
+    "send_records_method": "Ren4",
+    "endpoint_field": "Ceiy",
+    "close_method": "Kenv",
+    "endpoint_method": "OwhW",
+    "frame_method": "tenu",
+    "values_method": "yenK",
+    "exchange_state_field": null,
+    "device_id_field": null
+  },
+  {
+    "core_sha256": "7AB55921D976D04DDB5163B5034764DB78B37A188276DCE44EC0E0924EC96F34",
+    "name": "2026-11-26-1628",
+    "work_sha256": "1259DF6CF6CBDC25823DE8CB443C2F1E268661696A7BD143327099F761824BAC",
+    "user_sha256": "39A236334049F0A92626D7CF49CAE08F9DB0416CD7B27D92DEF4C98292F99858",
+    "rpc_type": "cBSF.ABSs",
+    "server_type": "cBSF.ABSs+HuxA",
+    "login_server_field": "HBQ2",
+    "command_field": "VBeV",
+    "interactive_field": "XBeU",
+    "send_id_method": "iBgU",
+    "send_records_method": "bBge",
+    "endpoint_field": "fBeL",
+    "close_method": "yBSk",
+    "endpoint_method": "IqkW",
+    "frame_method": "LBgK",
+    "values_method": "rBgE",
+    "exchange_state_field": "BBeQ",
+    "device_id_field": "sBeW"
+  }
+]

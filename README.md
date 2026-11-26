@@ -4,6 +4,9 @@
 
 | 命令 | 操作 |
 |---|---|
+| `credentials-save` / `credentials-status` | 在终端录入隐藏密码并加密保存，或只检查保存状态 |
+| `login` / `login-probe` / `login-status` | 用正常账号密码进行原生 TCP 登录、离线编码检查、检查会话文件 |
+| `pricing-quote` | 按明确进货、运费、包材、其他成本、费率和利润目标计算 .49/.89/.99 渠道报价 |
 | `status` / `launch` / `routes` | 检查或启动智赢，查看扩展中的命令定义 |
 | `window-status` / `window-focus` | 按明确请求检查现有窗口或切到前台 |
 | `collected-transport-probe` | 无窗口加载原生 TCP 组件并验证请求编码 |
@@ -19,6 +22,10 @@
 | `report-create` / `report-status` / `report-summary` | 申请报告、查询生成状态、在内存下载并汇总 |
 
 ## 本地使用
+
+从采集到包装、定价、文案与图片回填，按 [操作流程](references/operation-workflow.md) 检查当前入口和未核验的接口。原定价表未知时，可用 [明确成本报价](references/pricing.md) 与合成 JSON 示例建立计算输入。
+
+终端输入手机号和隐藏密码可运行 `python scripts/zhiying.py credentials-save`，稍后 `python scripts/zhiying.py login --saved`。直接输入并登录可用 `login --remember`。登录成功后业务命令自动读取本地加密会话；实账户验证仍需用户输入。参见 [命令行登录](references/login.md)。
 
 ```powershell
 python scripts/zhiying.py status

@@ -143,6 +143,38 @@ class CollectedTransportTests(unittest.TestCase):
         self.assertIn('wrong product', result['error'])
         self.assertEqual(len(self.calls()), 1)
 
+    def test_batch_two_variant_adjustments_and_intro_append_share_one_verified_write(self):
+        result = self.cli('edit', '--adjust-surcharge', 'target', '0.01',
+                          '--adjust-surcharge', 'other', '0.01', '--append-intro', '*', '--include-intro')
+        self.assertTrue(result['remote_read_back_verified'])
+        self.assertEqual(result['intro_en'], 'Old*')
+        self.assertEqual(result['variant_changes'], [
+            {'key': 'target', 'old_money': '1.0', 'new_money': '1.01'},
+            {'key': 'other', 'old_money': '2.0', 'new_money': '2.01'}])
+        self.assertEqual([call['command'] for call in self.calls()],
+                         ['spider.detail', 'spider.update', 'spider.detail'])
+        write = self.calls()[1]
+        self.assertEqual(set(write['fields']), {'sale_intro', 'sale_stock'})
+        self.assertEqual(write['expected'], {key: self.record[key] for key in ('sale_intro', 'sale_stock')})
+        self.assertEqual(json.loads(write['fields']['sale_intro']), {'en': 'Old*', 'zh': 'Keep'})
+        self.assertEqual(json.loads(write['fields']['sale_stock']), [
+            {'key': 'target', 'money': 1.01}, {'key': 'other', 'money': 2.01, 'num': 5}])
+
+    def test_missing_intro_rejects_the_entire_edit_before_a_live_write(self):
+        self.record['sale_intro'] = '{"zh":"Keep"}'
+        self.state.write_text(json.dumps(self.record), encoding='utf-8')
+        result = self.cli('edit', '--adjust-surcharge', 'target', '0.01', '--append-intro', '*', expected=1)
+        self.assertIn('existing nonempty English introduction', result['error'])
+        self.assertEqual([call['command'] for call in self.calls()], ['spider.detail'])
+        self.assertEqual(json.loads(self.state.read_text(encoding='utf-8')), self.record)
+
+    def test_unconfirmed_append_stops_without_repeating_the_delta(self):
+        result = self.cli('edit', '--adjust-surcharge', 'target', '0.01',
+                          '--append-intro', '*', behavior='ignore', expected=1)
+        self.assertIn('read-back differs', result['error'])
+        self.assertEqual([call['command'] for call in self.calls()],
+                         ['spider.detail', 'spider.update', 'spider.detail'])
+
 
 if __name__ == '__main__':
     unittest.main()

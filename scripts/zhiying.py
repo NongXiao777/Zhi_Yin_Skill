@@ -266,6 +266,7 @@ def add_collected_edit_options(edit):
                       help='add a signed delta to money for an exact variant key, repeatable')
     edit.add_argument('--minimum-channel-price', help='quote a price ending in .49, .89 or .99 at or above this amount')
     edit.add_argument('--intro-file', type=Path, help='new English introduction as UTF-8 text')
+    edit.add_argument('--append-intro', metavar='TEXT', help='append exact text to the existing English introduction')
     edit.add_argument('--copy-file', type=Path, help='UTF-8 JSON with the English listing fields to replace')
     edit.add_argument('--blocked-brand', action='append', default=[], help='brand name to exclude, repeatable')
 
@@ -327,6 +328,7 @@ def main():
     import erp_products
     import listing_copy
     import sp_api
+    from login import LOGIN_COMMANDS, add_login_commands, login_result
 
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
@@ -335,6 +337,7 @@ def main():
     parser.add_argument('--extension', type=Path,
                         default=Path(os.environ.get('LOCALAPPDATA', '.')) / 'ZYing' / 'zying-ext.crx')
     commands = parser.add_subparsers(dest='action', required=True)
+    add_login_commands(commands)
     commands.add_parser('status', help='inspect local ZYing installation and processes')
     commands.add_parser('launch', help='start the installed ZYing client')
     commands.add_parser('collected-transport-probe', help='load native TCP components and encode an offline request')
@@ -347,6 +350,8 @@ def main():
     report_parser = commands.add_parser('traffic-summary', help='summarize a local Sales and Traffic JSON')
     report_parser.add_argument('--file', type=Path, required=True)
     add_traffic_options(report_parser)
+    pricing_parser = commands.add_parser('pricing-quote', help='quote .49/.89/.99 selling prices from explicit local costs and a profit target')
+    pricing_parser.add_argument('--file', type=Path, required=True, help='local pricing input JSON; all amounts use one currency')
     add_erp_commands(commands)
     add_collected_commands(commands)
     copy_check = commands.add_parser('listing-copy-check', help='check Amazon.com text and optionally map ERP fields')
@@ -358,7 +363,9 @@ def main():
     args.app = args.app.resolve()
     args.extension = args.extension.resolve()
     try:
-        if args.action == 'status':
+        if args.action in LOGIN_COMMANDS:
+            result = login_result(args)
+        elif args.action == 'status':
             result = status(args.app, args.extension)
         elif args.action == 'launch':
             result = launch(args.app, args.extension)
@@ -381,6 +388,9 @@ def main():
             return 0
         elif args.action == 'traffic-summary':
             result = traffic_summary(args.file, args.limit, **traffic_options(args))
+        elif args.action == 'pricing-quote':
+            from pricing import pricing_quote
+            result = pricing_quote(args.file)
         elif args.action in ('erp-product-get', 'erp-draft-preview'):
             result = erp_products.product_result(args, preview=args.action == 'erp-draft-preview')
         elif args.action == 'listing-copy-check':
@@ -403,9 +413,11 @@ def main():
         return 1
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired, zipfile.BadZipFile, KeyError,
             TypeError, AttributeError):
-        if args.action in ('status', 'launch', 'routes', 'collected-transport-probe', *WINDOW_COMMANDS):
+        if args.action in LOGIN_COMMANDS:
+            message = 'Could not complete the login command. Check the client installation and local protected files.'
+        elif args.action in ('status', 'launch', 'routes', 'collected-transport-probe', *WINDOW_COMMANDS):
             message = 'Probe failed. Verify the installation, package path and Windows process access.'
-        elif args.action in ('traffic-summary', 'listing-preview', 'erp-product-get', 'erp-draft-preview',
+        elif args.action in ('traffic-summary', 'pricing-quote', 'listing-preview', 'erp-product-get', 'erp-draft-preview',
                              'listing-copy-check', *COLLECTED_COMMANDS, *LIVE_COLLECTED_COMMANDS):
             message = 'Could not process the input. Check the file path, JSON contents and command options.'
         else:
