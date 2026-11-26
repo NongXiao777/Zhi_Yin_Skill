@@ -4,6 +4,7 @@ import base64
 import ipaddress
 import json
 import os
+import subprocess
 from pathlib import Path
 import uuid
 
@@ -12,7 +13,7 @@ from collected_transport import native_command, request, SESSION_ENV
 import login_credentials as credentials
 
 
-LOGIN_COMMANDS = ('credentials-save', 'credentials-status', 'login', 'login-probe', 'login-status')
+LOGIN_COMMANDS = ('credentials-save', 'credentials-status', 'login', 'login-probe', 'login-status', 'login-native')
 SESSION_PURPOSE = 'zhiying-login-session'
 
 
@@ -94,6 +95,23 @@ def login_result(args):
         return credentials.credential_status(args.credential_file)
     if args.action == 'login-status':
         return login_status(args.session_file)
+    if args.action == 'login-native':
+        command = native_command(args.app, source_file='NativeLoginHost.cs')
+        target = session_path(args.session_file)
+        try:
+            result = subprocess.run([*command, str(target), str(args.timeout)],
+                                    capture_output=True, timeout=args.timeout + 30)
+            response = json.loads(result.stdout.decode('utf-8-sig'))
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            raise ProductError('Native login did not complete. Check the login window and session status.') from None
+        if result.returncode or response.get('ok') is not True:
+            errors = {
+                'unsupported_client_version': 'The client update needs a verified native login profile',
+                'native_login_cancelled_or_timed_out': 'Native login was cancelled or timed out',
+                'native_session_save_failed': 'Native login succeeded, but protected session storage failed',
+            }
+            raise ProductError(errors.get(response.get('error'), 'Could not open or complete the native login window'))
+        return {key: response[key] for key in ('ok', 'authenticated', 'session_saved', 'session_file', 'protection', 'login_mode') if key in response}
     if args.action == 'login-probe':
         response = request(native_command(args.app), {'command': 'login.probe'})
         return {key: response[key] for key in (
@@ -134,6 +152,9 @@ def add_login_commands(commands):
     status = commands.add_parser('login-status', help='check saved session presence; does not contact the server')
     status.add_argument('--session-file', type=Path)
     commands.add_parser('login-probe', help='encode a synthetic login request without network or credentials')
+    native = commands.add_parser('login-native', help='open the vendor login window; user types password and session is protected after success')
+    native.add_argument('--session-file', type=Path)
+    native.add_argument('--timeout', type=int, choices=range(10, 1801), metavar='SECONDS', default=300)
     sign_in = commands.add_parser('login', parents=[store], help='login once using terminal input or locally saved credentials')
     sign_in.add_argument('--saved', action='store_true', help='unlock previously saved credentials instead of prompting')
     sign_in.add_argument('--remember', action='store_true', help='save credentials after successful login')

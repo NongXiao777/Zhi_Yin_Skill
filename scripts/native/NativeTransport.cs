@@ -322,16 +322,19 @@ internal sealed class NativeTransport
             throw new InvalidOperationException("missing_detail_record");
         string json = (string)recordType.GetMethod("ToJson", new[] { typeof(string[]) })
                                        .Invoke(root, new object[] { null });
-        var rows = JsonNode.Parse(json) as JsonArray;
+        var parsed = JsonNode.Parse(json);
+        var rows = parsed as JsonArray ?? (parsed as JsonObject)?["data"] as JsonArray;
+        if (rows != null && rows.Count == 0)
+            throw new InvalidOperationException("product_not_found");
         if (rows == null || rows.Count != 1 || rows[0] is not JsonObject row)
             throw new InvalidOperationException("unexpected_detail_shape");
         rows.RemoveAt(0);
         return row;
     }
 
-    private async Task<JsonObject> Read(int id)
+    private async Task<JsonObject> Read(int id, string command = "spider.detail")
     {
-        var record = ResultRecord(await Send("spider.detail", id));
+        var record = ResultRecord(await Send(command, id));
         if (record["sale_id"] == null || record["sale_id"].ToString() != id.ToString())
             throw new InvalidOperationException("wrong_product");
         return record;
@@ -384,7 +387,7 @@ internal sealed class NativeTransport
             exception = exception.InnerException;
         string[] publicErrors = {
             "unsupported_client_version", "invalid_session_configuration", "tcp_timeout",
-            "server_rejected_request", "missing_detail_record", "unexpected_detail_shape",
+            "server_rejected_request", "missing_detail_record", "unexpected_detail_shape", "product_not_found",
             "wrong_product", "invalid_update_fields", "native_fields_require_json_strings",
             "unsupported_command", "missing_session_file", "request_too_large"
             , "invalid_login_input", "password_encoding_failed", "login_endpoint_unavailable",
@@ -443,8 +446,8 @@ internal sealed class NativeTransport
                 int id = input["id"].GetValue<int>();
                 if (id <= 0)
                     throw new InvalidOperationException("wrong_product");
-                if (command == "spider.detail")
-                    response = new JsonObject { ["ok"] = true, ["record"] = await transport.Read(id) };
+                if (command == "spider.detail" || command == "sale.detail")
+                    response = new JsonObject { ["ok"] = true, ["record"] = await transport.Read(id, command) };
                 else if (command == "spider.update")
                     response = await transport.Update(id, input);
                 else

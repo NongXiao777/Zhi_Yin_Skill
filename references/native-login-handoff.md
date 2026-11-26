@@ -1,6 +1,6 @@
 # 原生登录窗口与会话桥：IDA 分析交接
 
-目标一：agent 能呼出厂商原生登录窗口，用户只在窗口内输入密码，成功后生成受保护的 CLI 会话。目标二：已有原生窗口登录成功后，CLI 能接续授权会话。两项都尚未完成端到端验证。
+验证更新（2026-11-26）：目标一已由 `login-native` 完成动态验证，原生窗口登录成功后保存 DPAPI 会话，独立 CLI 使用 `sale.detail` 读到“我的产品”记录。`Global.ShowLogin()` 会运行更新检查，实际宿主直接创建 `MLogin.Instance` 并设置 Context。目标二也已验证：现有桌面进程定向读取 token、用户、设备、交换状态和实际默认服务器池，立即加密后成功读取同一商品；尚未封装为稳定命令。以下保留分析入口，用于后续版本和现有窗口接管。
 
 请分析实际安装的 `%LOCALAPPDATA%\Programs\ZYing`，不要混用 `D:\ZYing` 历史版。2026-11-26 16:28 当前版本：
 
@@ -42,11 +42,11 @@
 - `sBeW`（静态设备 Guid）、`BBeQ`（交换状态）、`QBer`（当前版本 12980）、`Member.Token` 在帧中怎样使用，跨进程复用是否允许，token 是否与设备/连接/服务器绑定。
 - 成功回调能否直接输出 `server_address/server_port/token/user_id` 及必需的设备或交换状态，并立即 DPAPI 加密。只输出字段名与必要调用链，不提供真实值。
 
-当前 CLI 已支持可选 `device_id/exchange_state` 并有原生回环测试；真实桌面 token 经只读字段读取后，用独立 TCP 查询先返回 `session_rejected (-9)`。重新按 Guid 子字段读取后错误变成 `unexpected_detail_shape`，这提示最初 Guid 读取方法可能不正确，但不证明会话已完整可用。请优先提供成功后最小会话初始化链，避免基于这些现象推断。
+当前 CLI 支持可选 `device_id/exchange_state` 并有原生回环测试。独立合成进程确认 ClrMD 的 `ClrStaticField.Read<Guid>` 会读错静态 Guid；需 `ReadStruct` 再读取 `_a..._k`。真实进程使用此方式、读取 `HBQ2` 的实际 endpoint 后，CLI `sale.detail` 查询已成功。仍建议直接在原生窗口宿主的同一进程读取会话，避免额外诊断依赖。
 
-## 3. 真实商品详情为何不是合成测试里的单行 root（次优先）
+## 3. 详情响应已确认的来源与形状
 
-检查 User 的 `ZYing.Detail.Sale.Load/Read`，`spider.detail` 的响应 RecordSet 名称与 `root` 形状。当前 `NativeTransport.ResultRecord` 假定 `root.ToJson()` 是只含一个对象的 JSON 数组；真实请求返回 `unexpected_detail_shape`。需要确认合法空值、分页/多行/对象结构、不同商品来源分支、公司/用户过滤与产品服务器选择。
+“我的产品”构造 Sale 时前缀是 `sale`，所以使用 `sale.detail`；“产品采集”前缀是 `spider`。此前对“我的产品”编号调用 `spider.detail` 的已认证响应 root 为零行。当前解析支持普通数组和分页对象的 `data` 数组，对空记录明确返回 `product_not_found`，仍核对单行与 sale_id。`Record.ToJson` 不需手工重置游标。
 
 最小提交字段和保存后的审核状态另有任务：商品 `951393413` 的两个变体各加价 `0.01`，英文介绍追加 `*`。本次尚未写入。登录和只读详情确认之前不要用保存测试接口。
 

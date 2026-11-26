@@ -19,14 +19,14 @@ class TransportConflict(ProductError):
     pass
 
 
-def native_command(app):
+def native_command(app, source_file='NativeTransport.cs'):
     shell = shutil.which('pwsh')
     if shell is None:
         raise ProductError('The native transport needs PowerShell 7 and the installed .NET 6 Desktop Runtime')
     build = Path(__file__).parent / 'native' / 'Build.ps1'
     try:
         completed = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-File', str(build),
-                                    '-AppDirectory', str(app.parent)], capture_output=True, timeout=30)
+                                    '-AppDirectory', str(app.parent), '-SourceFile', source_file], capture_output=True, timeout=30)
         result = decode_json(completed.stdout.decode('utf-8-sig'))
         if completed.returncode or result.get('ok') is not True:
             raise ValueError('Build failed')
@@ -72,6 +72,7 @@ def request(transport, payload):
         native_errors = {
             'missing_session_file': 'The native transport needs a local session file in ZHIYING_SESSION_FILE',
             'unsupported_client_version': 'The installed client differs from the verified native transport version',
+            'product_not_found': 'The authenticated detail response contained no product. Verify the internal collected-product ID',
             'invalid_session_configuration': 'The local session needs the actual server address, port and login token',
             'server_rejected_request': 'The server rejected the native request. Verify the login session and account permissions',
             'login_rejected': 'Login was rejected. Check the phone number, password and account state before trying again',
@@ -117,8 +118,8 @@ def request(transport, payload):
     return response
 
 
-def detail(transport, product_id):
-    response = request(transport, {'command': 'spider.detail', 'id': product_id})
+def detail(transport, product_id, command='spider.detail'):
+    response = request(transport, {'command': command, 'id': product_id})
     record = response.get('record')
     if not isinstance(record, dict) or 'sale_id' not in record or product_number(record['sale_id']) != product_id:
         raise ProductError('Transport detail returned the wrong product or omitted its sale_id')
@@ -128,7 +129,8 @@ def detail(transport, product_id):
 def live_result(args, *, edit=False):
     transport = transport_command(args)
     product_id = product_number(args.product_id)
-    record = detail(transport, product_id)
+    command = 'sale.detail' if args.action == 'product-live-get' else 'spider.detail'
+    record = detail(transport, product_id, command)
     before = {field: deepcopy(record.get(field)) for field in EDIT_FIELDS} if edit else {}
     result = record_result(args, product_id, record, edit=edit, live=True)
     result.update(mode='live_transport', transport_calls=1)

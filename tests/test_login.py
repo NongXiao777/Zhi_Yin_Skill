@@ -161,6 +161,37 @@ class LoginTests(unittest.TestCase):
         self.assertEqual(entered, {})
         self.assert_safe(result)
 
+    def test_native_login_uses_window_host_without_loading_or_prompting_for_credentials(self):
+        self.args.action = 'login-native'
+        self.args.timeout = 30
+        native_reply = {'ok': True, 'authenticated': True, 'session_saved': True,
+                        'session_file': str(self.session_file), 'protection': login_credentials.PROTECTION,
+                        'login_mode': 'native_window', 'token': self.session['token']}
+        completed = subprocess.CompletedProcess(self.transport, 0, json.dumps(native_reply).encode(), b'')
+        with patch.object(login, 'native_command', return_value=self.transport) as build, \
+                patch.object(login.credentials, 'prompt_credentials', side_effect=AssertionError('Window collects credentials')), \
+                patch.object(login.credentials, 'load_credentials', side_effect=AssertionError('Must not unlock saved password')), \
+                patch.object(login.subprocess, 'run', return_value=completed) as run:
+            result = login.login_result(self.args)
+        build.assert_called_once_with(self.args.app, source_file='NativeLoginHost.cs')
+        self.assertEqual(run.call_args.args[0], [*self.transport, str(self.session_file), '30'])
+        self.assertEqual(result['login_mode'], 'native_window')
+        self.assert_safe(result)
+
+    def test_cancelled_native_login_preserves_existing_session_and_redacts_raw_output(self):
+        self.args.action = 'login-native'
+        self.args.timeout = 30
+        self.session_file.write_bytes(b'old-protected-session')
+        completed = subprocess.CompletedProcess(self.transport, 1,
+            json.dumps({'ok': False, 'error': 'native_login_cancelled_or_timed_out', 'password': self.secret['password']}).encode(), b'')
+        with patch.object(login, 'native_command', return_value=self.transport), \
+                patch.object(login.subprocess, 'run', return_value=completed):
+            with self.assertRaises(ProductError) as error:
+                login.login_result(self.args)
+        self.assertIn('cancelled', str(error.exception))
+        self.assert_safe(str(error.exception))
+        self.assertEqual(self.session_file.read_bytes(), b'old-protected-session')
+
     def test_noninteractive_cli_rejects_before_login_or_secret_output(self):
         output = io.StringIO()
         argv = [str(ROOT / 'scripts' / 'zhiying.py'), '--app', str(self.args.app), 'login',

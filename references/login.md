@@ -4,6 +4,19 @@
 
 ## 用户在终端输入
 
+也可使用厂商原生登录窗口：
+
+```powershell
+python scripts/zhiying.py login-native
+python scripts/zhiying.py product-live-get --product-id 951393413 --limit 2
+```
+
+`login-native` 在独立 STA .NET 6 Desktop 宿主中创建 `ZYing.MLogin.Instance`，用户直接在原生窗口输入账号/密码。成功后同一宿主读取 `Member.Token/UserID`、实际 `HBQ2` endpoint、设备 Guid 和交换状态，并立即保存 DPAPI 会话；随后关闭宿主窗口。厂商成功路径可能短暂创建主窗口，这个闪现不代表登录失败。CLI 返回 `authenticated: true` 和 `session_saved: true` 后，用只读商品命令验证会话。
+
+宿主使用自己的临时应用目录；原生记住的手机号可能需要首次输入。它不解密已有 CLI 密码，也不从另一桌面进程扫描内存；用户名记住和缓存清理沿用原生窗口的正常行为。用户取消或超时不会替换旧会话。厂商 `Global.ShowLogin()` 会调用更新检查，因此宿主直接创建 `MLogin` 并设置 `Global.Context`。
+
+2026-11-26 已验证原生窗口显示、真实登录成功、DPAPI 会话交接，以及独立 CLI 的 `sale.detail` 读取。“我的产品”使用 `product-live-get`（`sale.detail`）；“产品采集”使用 `collected-product-live-get`（`spider.detail`）。两个来源不能混用，同一编号在另一来源可能没有记录。
+
 只录入并保存，暂不联网：
 
 ```powershell
@@ -54,4 +67,4 @@ python scripts/zhiying.py login-probe
 
 若真实登录失败，需要优先核对当前安装目录的 `ZYing.User.dll` 中 `MLogin.<登录>d__14.MoveNext` 的普通手机号分支、`ZYing.Work.dll` 中 `common.login` 响应与 TCP pool，以及 `ZYing.Core.dll` 中 `Safe.Encrypt`。提交脱敏字段与调用链即可，无需密码、完整 token 或进程内存转储。
 
-原生窗口呼出、已有桌面会话交接及真实详情响应仍待核验。协作分析时读 [native-login-handoff.md](native-login-handoff.md)；这份交接列出当前版本入口、RVA 和待解问题，不能把它当作已完成的登录功能。
+已有桌面进程的定向会话读取也已验证：仅读取指定会话字段并立即加密后，独立 CLI 的 `sale.detail` 成功读取同一商品。该方法尚未封装为稳定命令；常规使用优先 `login-native`。继续分析现有窗口接管时读 [native-login-handoff.md](native-login-handoff.md)。

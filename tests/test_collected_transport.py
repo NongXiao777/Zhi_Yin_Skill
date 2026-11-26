@@ -50,6 +50,7 @@ class CollectedTransportTests(unittest.TestCase):
         env = os.environ.copy()
         env.pop('ZHIYING_COLLECTED_TRANSPORT', None)
         env.pop('ZHIYING_SESSION_FILE', None)
+        env['LOCALAPPDATA'] = str(self.state.parent / 'isolated-local-appdata')
         command = [sys.executable, str(CLI), f'collected-product-live-{action}', '--product-id', '1001']
         if transport:
             command.extend(['--transport', sys.executable,

@@ -40,6 +40,8 @@ class Fixture {
     using(var input=JsonDocument.Parse(Console.In.ReadToEnd())) {
       foreach(var row in input.RootElement.EnumerateObject()) {
         var record=rt.GetMethod("FromJson",new[]{typeof(string)}).Invoke(null,new object[]{row.Value.GetRawText()});
+        if(row.Value.ValueKind == JsonValueKind.Object && row.Value.TryGetProperty("fixture_page_size", out var pageSize))
+            rt.GetProperty("PageSize").SetValue(record,pageSize.GetInt32());
         rt.GetField("Name").SetValue(record,row.Name);
         rs.GetMethod("Add",new[]{rt}).Invoke(records,new[]{record});
       }
@@ -157,6 +159,30 @@ class NativeTransportTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(json.loads(result.stdout), {'ok': False, 'error': 'unsupported_client_version'})
         self.assertNotIn('13800000000', result.stdout)
+
+    def test_my_products_detail_uses_sale_command_and_returns_the_matching_record(self):
+        result, observed, _ = self.exchange(
+            {'command': 'sale.detail', 'id': 1001}, {'root': {'sale_id': 1001, 'sale_cur': 'USD'}},
+            protected_session={'token': str(uuid.uuid4()), 'user_id': 731})
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(json.loads(result.stdout)['record']['sale_id'], 1001)
+        self.assertIn(b'sale.detail', observed['request'])
+        self.assertNotIn(b'spider.detail', observed['request'])
+
+    def test_paginated_one_row_detail_is_accepted(self):
+        result, _, _ = self.exchange(
+            {'command': 'spider.detail', 'id': 1001},
+            {'root': {'sale_id': 1001, 'fixture_page_size': 20}},
+            protected_session={'token': str(uuid.uuid4())})
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(json.loads(result.stdout)['record']['sale_id'], 1001)
+
+    def test_empty_authenticated_detail_reports_product_not_found(self):
+        result, _, _ = self.exchange(
+            {'command': 'spider.detail', 'id': 1001}, {'root': []},
+            protected_session={'token': str(uuid.uuid4())})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(json.loads(result.stdout), {'ok': False, 'error': 'product_not_found'})
 
     def test_desktop_session_device_and_exchange_state_reach_the_native_frame(self):
         device = str(uuid.uuid4())
