@@ -4,7 +4,7 @@
 
 ## 来源读取
 
-1. 按 [默认浏览器流程](browser-workflow.md) 复用普通 Chrome、取得远程调试许可并提醒或尝试前台。已有商品链接时直接使用；有选品授权但未给链接时，由 AI 在这个 Chrome 比较和选择。登录和验证由用户在同一窗口处理。
+1. 按 [默认浏览器流程](browser-workflow.md) 直接使用普通 Chrome 的现有调试会话，并在任务需要时切到目标标签。首次接入且 Chrome 要求许可时，等待同一次请求。已有商品链接时直接使用；有选品授权但未给链接时，由 AI 在这个 Chrome 比较和选择。登录和验证由用户在同一窗口处理。
 2. 默认通过「速卖通商品采集助手」0.2.0 的后台入口取得完整 `{ok, product}`，无需弹窗或导出按钮。插件目录在 `assets/aliexpress-collector/`，升级后提醒用户重新加载未打包扩展。
 3. 用 `scripts/browser_call.py extension-read --url SOURCE_URL --output ABSOLUTE_SCRIPT_PATH` 生成调用，在该插件 `background.js` 的 `serviceWorkerId` 中以 `sourcePath`、`format: "function"` 执行，不传 `pageId`。成功结果的 `collector_origin` 为 `extension_service_worker`。把完整 JSON 保存到任务工作文件；`--source-file` 接受原始 `product` 或完整成功结果，保留其中的图片、规格、变体数组。
 

@@ -4,10 +4,24 @@
 
 ## 接入与前台
 
-1. 发现现有普通 Chrome 和匹配标签。已有可用且获准的调试连接就复用；调用工具前确认目标，避免工具默认启动独立配置。没有普通 Chrome 时正常启动它再连接。
-2. 尚未获准时，向这个 Chrome 发起远程调试接入请求。未启用时，在同一窗口打开 `chrome://inspect/#remote-debugging`，提醒用户勾选「Allow remote debugging for this browser instance」；通过连接器的 existing-browser / `--autoConnect`，或页面实际显示的端点连接。Chrome 的允许提示由用户点击；成功看到标签列表后才操作。许可有效时不反复要求允许。
-3. 连接后提醒：「请保持这个 Chrome 窗口打开；选品和采集时尽量放在前台。」默认尝试 `select_page` 的 `bringToFront: true`。需要界面操作且窗口最小化时，用可用窗口工具恢复；失败才请用户恢复同一窗口。普通 API 读回不需要持续抢占前台。
-4. 连接超时或拒绝时说明实际阻碍，继续处理同一窗口，不关闭用户 Chrome 或换成独立配置。
+1. 有现成连接时直接执行当前操作，复用该连接中已定位的标签和 worker。缺少目标标签或 worker 时再调用 `list_pages`。连接器的列表可能是结构化记录或文本，按实际格式使用。已有接入请求在等待时，继续等原请求返回。
+2. 首次接入使用明确支持 existing-browser / `--autoConnect` 的连接器，或同一 Chrome 实际显示的调试端点。工具配置会启动独立 Chrome 时，用下面的持久客户端。只有普通 Chrome 未运行时，才按常规配置启动。只有调试未启用时，才在同一窗口打开 `chrome://inspect/#remote-debugging` 请用户勾选「Allow remote debugging for this browser instance」。Chrome 显示接入确认时，由用户点击一次「允许」。
+3. 从只读验证到后续选品、插件取数、填草稿、保存和读回，保留同一个客户端进程和调试会话。跨工具调用、用户回复和后续步骤继续使用该连接。使用浏览器助手返回的标签 ID 和 worker ID，无需单独接入 worker。一次性命令退出会释放调试连接，后续调用可能再次弹出许可。
+4. 待许可时继续等待原请求。遇到超时先确认原请求是否还在等待，再通过已有状态或 Chrome 界面判断实际阻碍。确认原请求已经结束、连接确实不可用且任务仍需接入时，向同一 Chrome 发起一次重连。明确拒绝时暂停接入。独立配置需要用户明确指定。
+5. 连接后提醒用户保持原 Chrome 打开。选品、采集或界面核验时默认尝试 `select_page` 的 `bringToFront: true`。最小化时先尝试恢复。用户要求纯只读验证时，读取当前任务所需页面。登录、验证及 Chrome 许可由用户处理，已授权的业务步骤由助手直接完成。
+
+### Windows 上的持久客户端
+
+优先复用已连接普通 Chrome 的工具会话。如果内置 Chrome DevTools 工具的实际启动参数会开独立配置，可在持久的 Node REPL 导入 [browser_session.mjs](../scripts/browser_session.mjs)。首次使用时定位已安装的 Node.js 和 Chrome DevTools MCP 入口文件，提供绝对路径。后续在同一 REPL 中复用 `globalThis.zyBrowserConnection`，也可调用 `getChromeSession()` 取得已有对象。直接调用任务所需的工具。
+
+```js
+const { pathToFileURL } = await import("node:url");
+const { getChromeSession } = await import(pathToFileURL(browserSessionPath).href);
+const chrome = getChromeSession({ nodePath, mcpEntry });
+const snapshot = await chrome.call("take_snapshot", { pageId });
+```
+
+`browserSessionPath` 是技能的 `scripts/browser_session.mjs` 绝对路径，`nodePath` 是 Node 可执行文件。`mcpEntry` 取已安装包的 `package.json` 中 `bin.chrome-devtools-mcp` 指向的文件。`chrome.call(name, arguments)` 使用与同名 DevTools 工具相同的参数及返回格式。示例中的 `pageId` 是已定位的目标标签。仅在客户端进程确实退出、需要重新接入时，以 `reconnect: true` 新建持久客户端。
 
 ## AI 选品
 
@@ -19,7 +33,7 @@
 
 默认使用「速卖通商品采集助手」0.2.0 或兼容版本，本地目录为 `assets/aliexpress-collector/`。复用已安装的同名插件；升级文件后提醒用户在 `chrome://extensions` 重新加载未打包扩展并核对版本。缺少插件且工具支持普通 Chrome 中安装时才安装这份目录。
 
-1. 激活选中的商品标签。用 `list_extensions` 找到名称和 ID，再从 `list_pages` 找到该 ID 的 `background.js` service worker。手动重新加载后扩展列表可能保留旧版本，最终以 helper 在 worker 内读取的 `chrome.runtime.getManifest().version` 为准。使用实际返回的 `serviceWorkerId`，不写死 ID。
+1. 激活选中的商品标签，复用同一连接中已定位的采集 worker。需要定位时，扩展名称和 ID 从 `list_extensions` 取得，该 ID 的 `background.js` worker 从 `list_pages` 取得。手动重新加载后扩展列表可能保留旧版本，最终以 helper 在 worker 内读取的 `chrome.runtime.getManifest().version` 为准。使用实际返回的 `serviceWorkerId`。
 2. 用 `browser_call.py extension-read --url SOURCE_URL --output ABSOLUTE_SCRIPT_PATH` 生成调用；执行时传 `sourcePath`、`format: "function"` 和 `serviceWorkerId`，不传商品 `pageId`。
 3. 插件后台 `zyingAliExpressCollect` 在匹配商品标签读取数据并直接返回 JSON，不打开弹窗、不点「导出」、不下载文件。多个匹配标签时优先唯一活动标签；仍有歧义才在请求中提供真实 Chrome `tab_id`，它不是工具的 `pageId`。
 4. 核对 `ok`、`collector_origin: "extension_service_worker"`、来源 ID 和网址，将完整结果保存到任务工作文件交给 `--source-file`。顶层是 `product` 对象或 `{ok, product}`；图片、规格、变体是对象内数组，不是顶层批量商品数组。
