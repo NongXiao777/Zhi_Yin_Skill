@@ -35,3 +35,10 @@ For live integration, establish a vendor-supported or otherwise authorized trans
 Public unauthenticated GET checks on 2026-11-20 returned HTTP 200 for `https://www.zying.net`, `https://erp.zying.net`, and `https://seller.zying.net`. The latter two expose separate web apps built with Umi JavaScript bundles. Access to the existing desktop collection data remains unverified.
 
 The extension's localhost:1717 HTTP/WebSocket references are inside developer hot-reload code guarded by isDev/false conditions. They are not a production desktop control API. A CefSharp or Chrome/Edge CDP endpoint must be observed before claiming attach support; passing a guessed debugging flag to this executable is insufficient. A no-argument command-line launch was attempted on 2026-11-20; the initial inspection observed ZYing and no app-owned listening port. A later status check found no remaining process under the installation directory. Startup can be requested from the CLI, but a persistent, usable client session was not validated. This does not establish a CDP endpoint after login or after opening an embedded browser.
+
+## Chrome 浏览器工作方式
+
+- 默认连接用户日常使用的普通 Chrome，复用现有窗口、登录状态和匹配标签。调用可能自动启动浏览器的 MCP 工具前，先确认它会连接该普通窗口。
+- 没有运行中的普通 Chrome 时，按正常方式启动 Chrome，沿用用户的常规配置，再连接这个窗口。使用可用的浏览器连接器、`--autoConnect` 或已观察到的调试端点；遇到 Chrome 自身的接入确认时由用户处理。连接后复用同一会话，只有缺少匹配标签时才新开标签。
+- 只有用户明确要求独立浏览器时，才可使用 MCP 启动的独立 Chrome、专用配置或 `--isolated` 临时浏览器。连接失败、没有调试端点或审批受阻时，说明具体阻碍，不自行切换到独立浏览器。
+- 简短说明实际使用的 Chrome 窗口。如需登录或额外验证，请用户直接在选定窗口内完成。
