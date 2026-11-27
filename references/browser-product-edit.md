@@ -2,7 +2,7 @@
 
 使用 `scripts/zying_web_product_edit.js` 的 `zyingWebProductEdit` 读取、预览、保存和核验已有产品。当前已在网页采集列表的服务器测试产品上同时验证五个英文文案字段及两个变体加价，其他字段保持不变。
 
-默认复用用户现有普通 Chrome 的已授权调试连接、窗口和匹配标签。连接后提醒用户保持这个窗口打开至浏览器任务完成；需要查看或操作界面时保持窗口显示、不要最小化，普通接口读回不要求浏览器一直在前台。产品采集选择 `source: "spider"`，页面为 `#/product/1688/collectionlist`；我的产品选择 `source: "sale"`，页面为 `#/product/myproduct/productlist`。保存返回空值或 null 不能单独证明成功或失败，必须看同源读回的核验结果。浏览器接口不可用时先读取现状；已有原生 CLI 可以按相同产品来源处理，结果不明时不改用它重复写入。
+默认复用普通 Chrome 的已授权调试连接和已登录智赢标签；接入与前台按 [默认浏览器流程](browser-workflow.md)。产品采集选择 `source: "spider"`，页面为 `#/product/1688/collectionlist`；我的产品选择 `source: "sale"`，页面为 `#/product/myproduct/productlist`。`product_id` 必须是服务器数字编号，不能传 `New` 或来源商品 ID。网页可用时不先启动 exe 或 native 登录。切换原生 CLI 时说明其登录与网页登录独立、依赖客户端版本和字段支持，再按同一来源处理。空响应先读回，结果不明不切换接口重复写入。
 
 ## 字段
 

@@ -20,6 +20,7 @@ from urllib.parse import urlsplit
 
 HELPERS = {
     "collect": ("aliexpress_browser_collect.js", "collectAliExpressProduct"),
+    "extension-read": ("aliexpress_extension_read.js", "zyingAliExpressExtensionRead"),
     "new-draft": ("zying_web_new_draft.js", "zyingWebNewDraft"),
     "product-edit": ("zying_web_product_edit.js", "zyingWebProductEdit"),
     "product-create": ("zying_web_product_create.js", "zyingWebProductCreate"),
@@ -145,7 +146,7 @@ def build_request(helper: str, request_file: Optional[Path] = None,
                   action: Optional[str] = None, source_file: Optional[Path] = None,
                   preview_file: Optional[Path] = None, url: Optional[str] = None) -> Dict[str, Any]:
     if helper not in HELPERS:
-        raise BrowserCallError("unknown_helper", "Choose collect, new-draft, product-edit, or product-create")
+        raise BrowserCallError("unknown_helper", "Choose collect, extension-read, new-draft, product-edit, or product-create")
     request = read_json(request_file, "request file") if request_file is not None else {}
     if helper == "collect":
         if any(value is not None for value in (action, source_file, preview_file)):
@@ -165,8 +166,28 @@ def build_request(helper: str, request_file: Optional[Path] = None,
         if "source_product_id" in request and "target_url" not in request:
             request["target_url"] = "https://www.aliexpress.com/item/" + request["source_product_id"] + ".html"
         return request
+    if helper == "extension-read":
+        if any(value is not None for value in (action, source_file, preview_file)):
+            raise BrowserCallError("invalid_arguments", "Extension read accepts only a request file and an optional URL")
+        _check_keys(request, {"target_url", "source_product_id", "tab_id"})
+        if "tab_id" in request and (type(request["tab_id"]) is not int or not 1 <= request["tab_id"] <= 2_147_483_647):
+            raise BrowserCallError("invalid_extension_tab_id", "Extension tab ID must be a positive Int32 Chrome tab ID")
+        if "source_product_id" in request and (not isinstance(request["source_product_id"], str) or
+                                              not ITEM_ID.fullmatch(request["source_product_id"])):
+            raise BrowserCallError("invalid_source_product_id", "Source product ID must be a 10 to 24 digit string")
+        if "target_url" in request:
+            target = canonical_aliexpress_url(request["target_url"])
+            _merge(request, "source_product_id", target["source_product_id"])
+            request["target_url"] = target["target_url"]
+        if url is not None:
+            for key, value in canonical_aliexpress_url(url).items():
+                _merge(request, key, value)
+        if "source_product_id" not in request:
+            raise BrowserCallError("source_product_id_required", "Extension read requires a known AliExpress source product ID or URL")
+        request.setdefault("target_url", "https://www.aliexpress.com/item/" + request["source_product_id"] + ".html")
+        return request
     if url is not None:
-        raise BrowserCallError("invalid_arguments", "URL is only supported for collect")
+        raise BrowserCallError("invalid_arguments", "URL is only supported for collect or extension-read")
     if action is not None:
         _merge(request, "action", action)
     if helper == "new-draft":
@@ -252,7 +273,7 @@ COLLECT_IDENTITY_CHECK = r"""  if (request.source_product_id) {
 
 def generate_invocation(helper: str, request: Dict[str, Any], scripts_dir: Optional[Path] = None) -> str:
     if helper not in HELPERS:
-        raise BrowserCallError("unknown_helper", "Choose collect, new-draft, product-edit, or product-create")
+        raise BrowserCallError("unknown_helper", "Choose collect, extension-read, new-draft, product-edit, or product-create")
     filename, function = HELPERS[helper]
     path = (scripts_dir or SCRIPTS_DIR) / filename
     try:
@@ -311,8 +332,8 @@ def parser() -> argparse.ArgumentParser:
         command = commands.add_parser(helper)
         command.add_argument("--request-file", type=Path, help="UTF-8 JSON request object")
         command.add_argument("--output", type=Path, required=True, help="Absolute output file path")
-        if helper == "collect":
-            command.add_argument("--url", help="AliExpress item link; the selected page must match this item")
+        if helper in {"collect", "extension-read"}:
+            command.add_argument("--url", help="AliExpress item link; use the product page for collect or the installed collector service worker for extension-read")
         elif helper == "new-draft":
             command.add_argument("--action", choices=("read", "preview", "fill", "verify"))
             command.add_argument("--source-file", type=Path, help="Raw product JSON or successful collector result")

@@ -1,6 +1,6 @@
 # 采集、资料整理与定价流程
 
-按用户的实际工作顺序推进，使用正常授权的 CLI、API 和本地文件。浏览器端复用用户普通 Chrome 的已授权调试连接；来源导入和创建按 [链接和 JSON 导入](aliexpress-import.md)，已有商品的文案和变体加价按 [浏览器编辑](browser-product-edit.md) 处理。VPN、Chin GPT 和网站登录仍由用户完成，本流程不自动操作这些背景步骤。
+按用户的实际工作顺序推进。未指定方案时优先普通 Chrome 和已登录智赢网页，按 [默认浏览器流程](browser-workflow.md) 取得远程调试许可、提醒或尝试前台、AI 选品和插件直接取数。来源导入和创建按 [链接和 JSON 导入](aliexpress-import.md)，已有商品编辑按 [浏览器编辑](browser-product-edit.md)。切换方案说明原因和实际缺点；网站登录及验证由用户处理。
 
 ## 各步骤的当前入口
 
@@ -8,8 +8,8 @@
 |---|---|---|
 | 打开定价表 | 接收本地 JSON、CSV、TSV、XLSX 商品表；`erp-product-get` 按编号或父 SKU 选择记录 | 现有定价表的路径、表头、公式和币种尚未提供。先用用户的表或明确输入，不能推断原表的计算规则 |
 | 打开 VPN、Chin GPT | 无需为这些背景步骤添加自动化 | 用户自行完成；商品任务直接在本对话继续 |
-| 登录智赢、读取商品 | `login-native` 使用原生窗口并保护会话；终端可用 `credentials-save` 与 `login`；“我的产品”读 `product-live-get`，“产品采集”读 `collected-product-live-get` | 核对商品来源和真实编号。原生窗口及“我的产品”读取已验证，具体保存以当前任务读回为准；见 [命令行登录](login.md) 与 [TCP 接口](collected-product-api.md) |
-| 速卖通登录、按单量搜索、采集到智赢 | 已有链接或扩展 JSON 可填写网页 New 草稿，或创建服务器采集产品并读回编号；搜索和排序由用户完成 | 来源读取、草稿填写和服务器创建按 [链接和 JSON 导入](aliexpress-import.md)。保存前补齐类目、成本和包装资料，缺少的来源 SKU 不推断 |
+| 登录智赢、读取商品 | 默认复用 Chrome 已登录智赢网页；选用 native/TCP 时再用 `login-native` 和对应来源的 live-get | 网页与 native 登录独立，核对来源和真实编号；按 [默认浏览器流程](browser-workflow.md) 选择方案 |
+| 速卖通登录、搜索、选品、采集到智赢 | 有选品授权时 AI 在同一 Chrome 搜索比较；插件后台直接返回 JSON，再填网页 New 或创建服务器产品 | 登录与验证由用户处理；资料缺失先保留 New 和来源 JSON，上传前补齐类目、成本、币种、毛重，不推断缺少的来源 SKU |
 | 补重量、包装尺寸和英文资料 | `erp-draft-preview` 读取包装数据、仅补缺失的估算；文案按 [Listing 流程](listing-workflow.md) 生成并用 `listing-copy-check` 检查 | 提供型号、原始描述、清晰照片、实际可售组合与件数；记录包装估算依据。当前 TCP 编辑命令未接入 `sale_weight`、`sale_size` 保存，审核值由人工回填 |
 | 查运费、阿里巴巴进货价、算渠道售价 | `pricing-quote --file pricing-input.json` 从明确单件成本、单件运费、费用和利润目标计算，并取 `.49/.89/.99` 尾数 | 用户提供匹配商品和采购数量的进货报价、按实际目的地/渠道得到的单件运费、费用、币种/汇率及利润目标。定价表和报价 API 未核验时使用明确输入；见 [本地定价](pricing.md) |
 | 完善各变体加价、文案和图片 | 浏览器用 `browser_call.py product-edit` 预览、保存并核验五个英文文案字段和批量绝对加价；CLI 按商品来源用 `product-live-edit` 或 `collected-product-live-edit`；图片按 [图片流程](listing-images.md) 制作 | 实际变体 `key`、现有 `money`、审核目标和商品素材。已有商品图片上传、绑定子体及渠道最终售价换算尚无已验证 API |

@@ -38,12 +38,14 @@ The extension's localhost:1717 HTTP/WebSocket references are inside developer ho
 
 ## Chrome 浏览器工作方式
 
+完整默认顺序见 [默认浏览器流程](browser-workflow.md)：发现普通 Chrome → 请求并等待远程调试许可（已有许可复用）→ 提醒或尝试前台 → 选品和插件取数。未启用时，在同一 Chrome 的 `chrome://inspect/#remote-debugging` 由用户允许该实例远程调试；连接使用实际观察到的端点或 existing-browser / `--autoConnect`。
+
 - 默认连接用户日常使用的普通 Chrome，复用现有窗口、登录状态和匹配标签。调用可能自动启动浏览器的 MCP 工具前，先确认它会连接该普通窗口。
 - 没有运行中的普通 Chrome 时，按正常方式启动 Chrome，沿用用户的常规配置，再连接这个窗口。使用可用的浏览器连接器、`--autoConnect` 或已观察到的调试端点；遇到 Chrome 自身的接入确认时由用户处理。连接后复用同一会话，只有缺少匹配标签时才新开标签。
 - 只有用户明确要求独立浏览器时，才可使用 MCP 启动的独立 Chrome、专用配置或 `--isolated` 临时浏览器。连接失败、没有调试端点或审批受阻时，说明具体阻碍，不自行切换到独立浏览器。
 - 简短说明实际使用的 Chrome 窗口。如需登录或额外验证，请用户直接在选定窗口内完成。
-- 连接后告知用户在浏览器任务完成前保持选定的 Chrome 窗口打开。助手复用同一连接和窗口；需要界面操作或可视核验时，提醒用户保持窗口显示、不要最小化。普通 API 读取无需持续将窗口置于前台。
+- 连接后提醒用户保持 Chrome 打开，选品、采集和界面核验时默认尝试将目标标签带到前台。窗口最小化时尝试恢复，失败才提醒用户恢复。普通 API 读取无需持续将窗口置于前台。
 
 ## 浏览器产品脚本（默认）
 
-链接或扩展 JSON 导入使用 [链接和 JSON 导入](aliexpress-import.md)；已有商品的五个英文文案字段和批量变体加价使用 [浏览器编辑](browser-product-edit.md)。默认通过 `scripts/browser_call.py` 生成完整调用文件，在现有普通 Chrome 连接中执行，保存后检查 `ok && verified`。旧表单方式仅作为确实需要操作页面控件时的备用路径，不作为手工拼接脚本的默认流程。
+默认方案和备选缺点见 [默认浏览器流程](browser-workflow.md)。插件 `extension-read` 调用在实际 `background.js` worker 的 `serviceWorkerId` 执行，不使用商品 `pageId`，不点弹窗或导出。链接或 JSON 导入见 [导入流程](aliexpress-import.md)，五个英文文案字段和批量加价见 [浏览器编辑](browser-product-edit.md)。`browser_call.py` 生成完整函数文件；保存后检查 `ok && verified`。

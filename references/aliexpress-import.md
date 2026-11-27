@@ -4,13 +4,15 @@
 
 ## 来源读取
 
-1. 默认复用用户日常使用的普通 Chrome 现有已授权调试连接、窗口和匹配标签；尚未连接时按 [浏览器连接流程](interfaces.md) 连接。没有普通 Chrome 时正常启动它。只有用户明确要求时才使用独立浏览器。连接后提醒用户保持窗口打开；界面操作时保持窗口显示、不要最小化。
-2. 从用户链接提取 `/item/{id}.html` 中的字符串 ID，使用同一商品标签。遇到登录或验证时由用户在这个窗口处理。
-3. 在商品页执行 `scripts/aliexpress_browser_collect.js` 中的 `collectAliExpressProduct`。它与自制采集扩展 0.1.2 使用相同的采集核心，返回 `{ok, product}`。把 `product` 对象作为下面的 `source`。生成器的 `--source-file` 接受原始 `product` 对象，或含 `ok: true` 与 `product` 的完整采集结果。
+1. 按 [默认浏览器流程](browser-workflow.md) 复用普通 Chrome、取得远程调试许可并提醒或尝试前台。已有商品链接时直接使用；有选品授权但未给链接时，由 AI 在这个 Chrome 比较和选择。登录和验证由用户在同一窗口处理。
+2. 默认通过「速卖通商品采集助手」0.2.0 的后台入口取得完整 `{ok, product}`，无需弹窗或导出按钮。插件目录在 `assets/aliexpress-collector/`，升级后提醒用户重新加载未打包扩展。
+3. 用 `scripts/browser_call.py extension-read --url SOURCE_URL --output ABSOLUTE_SCRIPT_PATH` 生成调用，在该插件 `background.js` 的 `serviceWorkerId` 中以 `sourcePath`、`format: "function"` 执行，不传 `pageId`。成功结果的 `collector_origin` 为 `extension_service_worker`。把完整 JSON 保存到任务工作文件；`--source-file` 接受原始 `product` 或完整成功结果，保留其中的图片、规格、变体数组。
 
-用 `scripts/browser_call.py collect --url SOURCE_URL --output ABSOLUTE_SCRIPT_PATH` 生成调用文件，再通过已连接浏览器的 `evaluate_script` 以 `sourcePath`、`format: "function"` 和商品标签 `pageId` 执行。只使用核对过的来源 ID 和当前页面字段，不合并其他商品、旧缓存或验证信息。
+插件不可调用时，说明原因和「未经过插件，页面可能缺完整 SKU 等字段」，再用 `scripts/browser_call.py collect --url SOURCE_URL --output ABSOLUTE_SCRIPT_PATH` 在同一普通 Chrome 的商品 `pageId` 直接运行相同采集核心。不要把备选结果说成插件读取。只使用核对过的来源 ID 和当前页面字段，不合并其他商品、旧缓存或验证信息。
 
 ## New 草稿填写
+
+`New` 表示尚未保存，不是真实编号；网页草稿和内嵌浏览器导入都可能处于这个阶段。资料缺失时先填写和验证 New，上传后从服务器读回数字编号，才使用编号编辑接口。
 
 1. 复用已登录的智赢 ERP 标签；没有匹配标签时在同一普通 Chrome 中打开网页。进入「我的产品 → 产品列表」，点击「添加产品」。既有编号的详情不属于这个流程。
 2. 在该标签运行 `scripts/zying_web_new_draft.js` 中的 `zyingWebNewDraft`。先用 `read` 读取 New 草稿，再用 `preview` 核对来源、目标字段和 `snapshot` 快照。英文导入时界面语言应为英语；脚本不自动切换语言。

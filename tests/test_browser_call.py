@@ -84,6 +84,46 @@ class BrowserCallTests(unittest.TestCase):
         path = self.json_file("conflict.json", {"source_product_id": "1005013209445273"})
         self.assert_error("conflicting_input", browser_call.build_request, "collect", request_file=path, url=SOURCE["source_url"])
 
+    def test_extension_read_requires_identity_and_canonicalizes_url_or_request(self):
+        expected = {"target_url": SOURCE["source_url"], "source_product_id": SOURCE["source_product_id"]}
+        self.assertEqual(browser_call.build_request("extension-read", url=SOURCE["source_url"] + "?spm=tracking"), expected)
+        for value in ({"source_product_id": SOURCE["source_product_id"]},
+                      {"target_url": SOURCE["source_url"] + "?spm=tracking"}, expected):
+            request_file = self.json_file("extension-read.json", value)
+            self.assertEqual(browser_call.build_request("extension-read", request_file=request_file), expected)
+        self.assert_error("source_product_id_required", browser_call.build_request, "extension-read")
+        self.assert_error("invalid_arguments", browser_call.build_request, "extension-read", action="read", url=SOURCE["source_url"])
+        self.assert_error("invalid_aliexpress_url", browser_call.build_request, "extension-read", url="https://aliexpress.com.evil.test/item/1005013209445272.html")
+        for value, code in (({"source_product_id": 1005013209445272}, "invalid_source_product_id"),
+                            ({"source_product_id": "123"}, "invalid_source_product_id"),
+                            ({"source_product_id": "1005013209445273"}, "conflicting_input"),
+                            ({"source_product_id": SOURCE["source_product_id"], "refresh": True}, "invalid_request_fields")):
+            request_file = self.json_file("bad-extension-read.json", value)
+            self.assert_error(code, browser_call.build_request, "extension-read", request_file=request_file, url=SOURCE["source_url"])
+
+    def test_extension_read_passes_optional_chrome_tab_id_and_rejects_invalid_values(self):
+        expected = {"target_url": SOURCE["source_url"], "source_product_id": SOURCE["source_product_id"], "tab_id": 7}
+        request_file = self.json_file("extension-tab.json", {"source_product_id": SOURCE["source_product_id"], "tab_id": 7})
+        self.assertEqual(browser_call.build_request("extension-read", request_file=request_file), expected)
+        for tab_id in (-1, 0, True, "7", 1.5, 2147483648):
+            request_file = self.json_file("invalid-extension-tab.json", {"source_product_id": SOURCE["source_product_id"], "tab_id": tab_id})
+            self.assert_error("invalid_extension_tab_id", browser_call.build_request, "extension-read", request_file=request_file)
+
+    def test_extension_read_cli_returns_only_summary_and_uses_worker_helper_without_product_page_gate(self):
+        helpers = self.stub_helpers()
+        output = self.folder / "extension-read.js"
+        stdout = io.StringIO()
+        with mock.patch.object(browser_call, "SCRIPTS_DIR", helpers), contextlib.redirect_stdout(stdout):
+            status = browser_call.main(["extension-read", "--url", SOURCE["source_url"], "--output", str(output)])
+        self.assertEqual(status, 0)
+        self.assertEqual(json.loads(stdout.getvalue()), {"ok": True, "helper": "extension-read", "sourcePath": str(output),
+                                                        "format": "function", "source_product_id": SOURCE["source_product_id"],
+                                                        "target_url": SOURCE["source_url"]})
+        source = output.read_text(encoding="utf-8")
+        self.assertIn("return zyingAliExpressExtensionRead(request)", source)
+        self.assertNotIn("location.href", source, "No product-page URL gate belongs before the extension helper")
+        self.assertNotIn("return collectAliExpressProduct", source)
+
     def test_new_draft_source_raw_and_successful_wrapper_and_fill_preview(self):
         for value in (SOURCE, {"ok": True, "product": SOURCE}):
             with self.subTest(wrapper="product" in value):
@@ -248,6 +288,7 @@ class BrowserCallTests(unittest.TestCase):
                                                   "__proto__": {"polluted": True}, "nested": [None, False, {"constructor": "data"}]}}
         program = "const fs=require('node:fs'),vm=require('node:vm'); const f=vm.runInNewContext('('+fs.readFileSync(process.argv[1],'utf8')+')',{}); f().then(x=>console.log(JSON.stringify(x)));"
         requests = {"new-draft": value,
+                    "extension-read": {"source_product_id": SOURCE["source_product_id"], "target_url": SOURCE["source_url"], "tab_id": 7},
                     "product-edit": {"action": "preview", "source": "sale", "product_id": 123,
                                      "changes": {"english_description": value["source"]["title"], "__proto__": {"data": True}}},
                     "product-create": {**value, "metadata": {**CREATE_METADATA, "note": value["source"]["title"],

@@ -1,5 +1,7 @@
 # 智赢跨境 Skill
 
+默认使用用户普通 Chrome：请求远程调试许可并提醒或尝试前台，由 AI 选品，调用随 skill 附带的采集插件后台直接返回 JSON，再填写 New 草稿、上传并读回真实编号。后续优先已登录智赢网页修改五个英文文案字段和批量变体加价。见 [默认浏览器流程](references/browser-workflow.md)。插件目录为 `assets/aliexpress-collector/`，升级后需重新加载未打包扩展；agent 不需要打开弹窗或点击导出。
+
 用简短的技能入口和 Python CLI 处理智赢本地诊断、产品资料和加价预览，以及亚马逊刊登预检、库存和销售流量。需要 Python 3.9+。Excel 工作簿读取使用可选依赖 `openpyxl`，智赢进程检查使用 Windows PowerShell。
 
 | 命令 | 操作 |
