@@ -5,8 +5,11 @@
 ## 记录更新前基线和对比更新后 DLL
 
 ```powershell
-python scripts/zhiying.py --app "$env:LOCALAPPDATA\Programs\ZYing\ZYing.exe" client-diagnose --symbols
+$zhiyingApp = "$env:LOCALAPPDATA\Programs\ZYing\ZYing.exe"
+python scripts/zhiying.py --app $zhiyingApp client-diagnose --symbols
 ```
+
+若任务使用其他安装路径，先将 `$zhiyingApp` 改为该路径，后续步骤沿用同一值。
 
 `client-diagnose` 只读取当前安装目录的 Core、Work、User DLL 和仓库里的 `scripts/native/client-profiles.json`。`dlls` 逐项显示 `matched`、`changed`、`missing` 或 `unreadable`，`sha256` 和 `baseline_sha256` 提供实测及基线哈希。可以把 JSON 输出保存在任务工作目录作为更新前记录。已记录的 TCP 类型依次为 `ze53.Fe5b`、`cBSF.ABSs`、`JgP5.ggPZ`，每个配置都保存了三份 DLL 的哈希。
 
@@ -19,7 +22,7 @@ python scripts/zhiying.py --app "$env:LOCALAPPDATA\Programs\ZYing\ZYing.exe" cli
 `scripts/native/Inspect.ps1` 只读取 DLL 的元数据和 IL，不读取配置、进程内存、凭据，也不联网。用 PowerShell 7 运行，输出存入任务的临时目录：
 
 ```powershell
-$appDir = "$env:LOCALAPPDATA\Programs\ZYing"
+$appDir = Split-Path -Parent $zhiyingApp
 pwsh -NoProfile -File scripts/native/Inspect.ps1 -AppDirectory $appDir -TypeMatch 'MLogin.*登录' -MethodMatch '^MoveNext$' -IncludeIL
 pwsh -NoProfile -File scripts/native/Inspect.ps1 -AppDirectory $appDir -TypeMatch '^JgP5\.ggPZ(?:\+DcoB)?$'
 ```
@@ -39,13 +42,13 @@ pwsh -NoProfile -File scripts/native/Inspect.ps1 -AppDirectory $appDir -TypeMatc
 ## 验证后继续任务
 
 ```powershell
-python scripts/zhiying.py login-probe
-python scripts/zhiying.py collected-transport-probe
-$env:ZHIYING_NATIVE_TEST_APP="$env:LOCALAPPDATA\Programs\ZYing\ZYing.exe"
+python scripts/zhiying.py --app $zhiyingApp login-probe
+python scripts/zhiying.py --app $zhiyingApp collected-transport-probe
+$env:ZHIYING_NATIVE_TEST_APP = $zhiyingApp
 python -m unittest discover -s tests -p test_native_transport.py
 ```
 
-探针必须返回 `network_requests_sent: 0`。原生测试使用合成凭据和回环服务器，应覆盖真实编码、响应等待、登录会话提取、拒绝/额外验证、DPAPI 互通和商品读取。调整相关业务代码后运行对应测试。当前版本通过验证后，若它的 Work 或 User 哈希与上次登录不同，用 `login-native --if-needed` 重新登录，先读取商品，再执行已授权修改并读回。
+探针必须返回 `network_requests_sent: 0`。原生测试使用合成凭据和回环服务器，应覆盖真实编码、响应等待、登录会话提取、拒绝/额外验证、DPAPI 互通和商品读取。调整相关业务代码后运行对应测试。通过验证后，用同一 `--app $zhiyingApp` 查 `login-status`。Work 或 User 哈希变化时用同一路径执行 `login-native --if-needed`。哈希匹配时通过对应来源的只读商品命令确认会话可用。业务命令继续带上同一 `--app $zhiyingApp`。
 
 保存前保留完整语言和变体集合，检查要改字段的 `expected` 基线。读回匹配提交字段后才能报告成功；审核状态、同步等其他服务端变化需额外读取检查。若保存结果不明，先读商品，不自动重试。若登录被拒绝，区分已保存输入、桌面分支、额外验证和服务器要求；不要把版本更新自动当作所有失败的原因。
 

@@ -32,4 +32,4 @@
 python scripts/zhiying.py listing-copy-check --file listing.json --erp-fields
 ```
 
-检查通过后返回智赢「英语」栏位的产品标题、短标题、要点说明、产品描述和关键词，可用于本地审阅或逐字段回填。CLI 检查文字形状、长度、已列出的品牌和常见关联措辞。商品真值、类目资格、图片和发布状态仍按上方流程核验。包装估算另走 [ERP 商品预览](erp-products.md)。
+检查通过后返回智赢「英语」栏位的产品标题、短标题、要点说明、产品描述和关键词，可用于本地审阅。回填时按 [浏览器编辑](browser-product-edit.md#字段) 的字段名填写。产品标题写 `sale_title`，短标题（Product Highlight）写 `sale_brief`，创建商品时的报关英文简称单独写 `sale_en`。CLI 检查文字形状、长度、已列出的品牌和常见关联措辞。商品真值、类目资格和图片仍按上方流程核验。包装估算另走 [ERP 商品预览](erp-products.md)。

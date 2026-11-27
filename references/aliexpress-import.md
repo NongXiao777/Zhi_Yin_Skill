@@ -12,7 +12,7 @@
 
 ## New 草稿填写
 
-`New` 表示尚未保存，不是真实编号；网页草稿和内嵌浏览器导入都可能处于这个阶段。资料缺失时先填写和验证 New，上传后从服务器读回数字编号，才使用编号编辑接口。
+`New` 表示尚未保存，网页草稿和内嵌浏览器导入都可能处于这个阶段。用户要求网页草稿时走本节。用户明确要求入「产品采集」时走下方创建流程，读回数字编号后使用编号编辑接口。资料缺失时保留来源 JSON 和已有草稿。
 
 1. 复用已登录的智赢 ERP 标签；没有匹配标签时在同一普通 Chrome 中打开网页。进入「我的产品 → 产品列表」，点击「添加产品」。既有编号的详情不属于这个流程。
 2. 在该标签运行 `scripts/zying_web_new_draft.js` 中的 `zyingWebNewDraft`。先用 `read` 读取 New 草稿，再用 `preview` 核对来源、目标字段和 `snapshot` 快照。英文导入时界面语言应为英语；脚本不自动切换语言。
@@ -47,7 +47,7 @@
 
 ## 创建服务器采集产品
 
-`scripts/zying_web_product_create.js` 的 `zyingWebProductCreate` 在已登录的网页采集列表 `#/product/1688/collectionlist` 中创建产品，使用 `spider` 来源。来源对象仍是扩展 `product`，另提供真实类目编号、英文简称、毛重、采购成本和币种。当前创建 payload 固定为 `sale_stat: 3411`、`sale_flag: 400`、`sale_level: 10`、`sale_grade: 1`、`sale_adult: false`；3411 是状态值，不是新产品编号。完整 payload 会在 `preview` 返回，核对后使用原快照。测试值只在用户授权实验时使用，并在备注中标明。
+`scripts/zying_web_product_create.js` 的 `zyingWebProductCreate` 在已登录的网页采集列表 `#/product/1688/collectionlist` 中创建产品，使用 `spider` 来源。来源对象仍是扩展 `product`，另提供真实类目编号、报关英文简称 `english_short`、毛重、采购成本和币种。当前创建 payload 固定为 `sale_stat: 3411`、`sale_flag: 400`、`sale_level: 10`、`sale_grade: 1`、`sale_adult: false`。完整 payload 会在 `preview` 返回，核对后使用原快照。测试值只在用户授权实验时使用，并在备注中标明。
 
 以下是 `create-preview-request.json` 的内容；来源另放在 `source.json`，由每次命令的 `--source-file` 提供。
 
@@ -75,8 +75,8 @@ python scripts/browser_call.py product-create --request-file create-verify-reque
 
 创建请求使用相同 `source`、`metadata` 和 `limit`（若提供），把 `action` 分别改为 `apply`、`verify`。`create-preview-result.json` 必须是完整的成功预览结果；两次调用都从它取原始 `preview.snapshot`。使用当前任务的实际绝对输出路径，再通过现有浏览器连接的 `evaluate_script` 传入 `sourcePath`、`format: "function"` 和采集列表标签的 `pageId`。
 
-当前服务创建后可能返回空值或 null 而不返回编号，不能据此重复提交。脚本使用原预览标记、创建前列表编号和同源详情读回发现新编号并核对字段。只有 `ok && verified` 才报告服务器创建成功。发现 `product_id` 而返回 `product_create_unverified` 表示记录已经被发现但字段尚未全部核验通过，应报告编号和失败检查，继续用原快照 `verify`；不要重建预览再提交。浏览器尝试状态丢失时，旧快照只可用于读回恢复，不能把它当成新的创建尝试。
+创建返回空值或结果不明时，仅用原快照 `verify`。脚本通过原预览标记、创建前的列表编号和同源详情定位新记录。`ok && verified` 表示已确认服务器记录，且已返回的核验项匹配。另列出 `serverOmittedFields` 中服务端省略的字段。若已有 `product_id` 但返回 `product_create_unverified`，报告编号和失败检查，并继续用原快照核验。浏览器尝试状态丢失后，旧快照仍可用于只读查证。
 
 New 草稿脚本只操作表单；服务器创建脚本经已登录网页加载的产品接口提交预览 payload，不调用 New 草稿表单的保存按钮。`browser_call.py` 只生成调用文件，不建立浏览器连接或直接向服务器创建产品；[操作流程](operation-workflow.md) 中的采集 CLI 状态与本节的浏览器调用分别记录。已有产品的批量加价和五个文案字段使用 [浏览器编辑](browser-product-edit.md)。
 
-当前客户端 UI 或 React 表单结构变化时，脚本应返回明确的接口不可用、语言不匹配或快照冲突，不改用独立浏览器或猜测新增 RPC。
+当前客户端 UI 或 React 表单结构变化时，报告脚本返回的接口不可用、语言不匹配或快照冲突，按 [普通 Chrome 工作流](browser-workflow.md) 检查对应页面。

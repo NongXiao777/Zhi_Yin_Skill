@@ -1,6 +1,6 @@
 # 智赢跨境 Skill
 
-默认使用用户普通 Chrome：请求远程调试许可并提醒或尝试前台，由 AI 选品，调用随 skill 附带的采集插件后台直接返回 JSON，再填写 New 草稿、上传并读回真实编号。后续优先已登录智赢网页修改五个英文文案字段和批量变体加价。见 [默认浏览器流程](references/browser-workflow.md)。插件目录为 `assets/aliexpress-collector/`，升级后需重新加载未打包扩展；agent 不需要打开弹窗或点击导出。
+默认复用用户的普通 Chrome 和已登录的智赢网页。采集插件在后台返回 JSON。按任务要求取资料、填写网页 New，或在「产品采集」创建服务器商品并读回编号。已有商品优先在网页编辑和核验。仅在用户明确要求独立 Chrome 时启动单独配置，并在启动前告知。见 [默认浏览器流程](references/browser-workflow.md)。扩展目录为 `assets/aliexpress-collector/`，升级后需重新加载。
 
 用简短的技能入口和 Python CLI 处理智赢本地诊断、产品资料和加价预览，以及亚马逊刊登预检、库存和销售流量。需要 Python 3.9+。Excel 工作簿读取使用可选依赖 `openpyxl`，智赢进程检查使用 Windows PowerShell。
 
@@ -51,7 +51,7 @@ python scripts/zhiying.py traffic-summary --file examples/sales-traffic.json --b
 
 ## Amazon 联机使用
 
-在线命令需要已获授权的 SP-API 应用和对应权限。`listing-preview` 固定使用 `VALIDATION_PREVIEW`；`report-create` 会向 Amazon 新建报告请求。配置、示例和结果解释见 [SP-API 操作说明](references/sp-api.md)。
+按用户要求使用在线命令，需要已获授权的 SP-API 应用和对应权限。`listing-preview` 固定使用 `VALIDATION_PREVIEW`，`report-create` 会向 Amazon 新建报告请求。Amazon 发布在默认工作流之外。配置、示例和结果解释见 [SP-API 操作说明](references/sp-api.md)。
 
 Sales and Traffic 覆盖整体页面流量。净利润和止损需要另有成本、费用、物流、退款和阈值。更多背景见 [亚马逊运营参考](references/amazon-organic.md)。
 

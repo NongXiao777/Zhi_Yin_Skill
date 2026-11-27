@@ -1,6 +1,6 @@
 # 持久商品计划与还原
 
-需要跨聊天继续、保存前审阅或稍后还原时，使用持久计划。继续沿用当前厂商传输器、版本配置和 DPAPI 会话，不需要另一套 TCP 或会话文件。
+使用 CLI 商品传输器时，可用持久计划保存预览、继续任务或按要求还原。使用内置 TCP 时沿用当前版本配置和 DPAPI 会话。普通 Chrome 编辑继续走 [网页预览和核验](browser-product-edit.md)，保留原预览结果以便恢复核验。
 
 ```powershell
 python scripts/zhiying.py product-plan --namespace sale --product-id 951393413 --adjust-surcharge KEY1 0.01 --adjust-surcharge KEY2 0.01 --append-intro "*" --output work/plan.local.json
@@ -13,7 +13,7 @@ python scripts/zhiying.py product-restore --plan work/plan.local.json
 
 `product-apply` 重新校验实际差异与计划展示一致，只允许既有变体的加价及英文文案字段。保存前重读将修改的完整列并比较基线，写入前将状态持久化为 `write_attempted`。同一计划文件持有操作系统文件锁，禁止并发和重复执行；保存结果未知时不能重新 apply。不同计划文件之间以及人工编辑仍需协调。
 
-`product-plan-show` 只校验并显示本地计划和保存状态，不代表重新查询服务器。未知写入结果先用对应 live-get 读取，或用 restore 的目标比较恢复；已还原计划再次 restore 是空操作，仅报告此前的核验结果。
+`product-plan-show` 只校验并显示本地计划和保存状态。CLI 写入结果未知时，用对应来源的 `product-live-get` 或 `collected-product-live-get` 查询服务器。用户要求撤销时才使用 `product-restore`，该命令可能写回原值。已还原计划再次 restore 是空操作，仅报告此前的核验结果。
 
 读回分开报告目标内容、改动列是否匹配和 `other_changed_fields`。服务端正常更新 `sale_log` 会列入额外变化，不会把已经正确保存的目标内容判成失败。桌面界面可能稍后才刷新，以服务器读回为准。
 
