@@ -1,11 +1,11 @@
 ---
 name: zhiying-cli
-description: Use 智赢跨境 through TCP login and product commands, quote prices from supplied costs, and prepare Amazon.com copy and images.
+description: Use 智赢跨境 through browser and TCP product interfaces, import AliExpress links or collector JSON, edit copy and variant surcharges, quote prices from supplied costs, and prepare Amazon.com copy and images.
 ---
 
 Run `scripts/zhiying.py` with Python 3.9+ and use `<command> --help` for flags. Return only the fields and rows needed.
 
-Use authorized CLI transports for live product operations and explicit local files for offline work. Keep screenshots read-only. Desktop diagnostics are independent of product editing.
+Use authorized browser or CLI transports for live product operations and explicit local files for offline work. Keep screenshots read-only. Desktop diagnostics are independent of product editing.
 
 If a client update causes `unsupported_client_version` or native reflection failures, repair the local version profile in the current task using [client-update.md](references/client-update.md). Inspect installed DLLs, verify with synthetic probes and loopback tests, then resume authorized work.
 
@@ -13,6 +13,8 @@ If a client update causes `unsupported_client_version` or native reflection fail
 - For the vendor login window, use `login-native`; the user types in that window and the helper protects the session after success. For terminal input, use `credentials-save`, then `login --saved`, or `login --remember`. Read [login.md](references/login.md).
 - For browser work, default to the user's existing normal Chrome and reuse matching tabs. If no normal Chrome is running, open it normally with the user's regular profile before connecting. Use a separate, dedicated, or isolated browser only when the user explicitly requests one; connection or approval failures must not trigger that fallback. Follow the browser connection workflow in [interfaces.md](references/interfaces.md).
 - Once connected, tell the user to keep the selected Chrome window open until the browser task finishes. Reuse the same connection and window; when UI interaction or a visual check is needed, remind the user to keep it restored (not minimized). Ordinary API reads do not require Chrome to remain in the foreground.
+- To import an AliExpress link or extension JSON into a New draft or a numbered server collection product, read [aliexpress-import.md](references/aliexpress-import.md). Generate calls with `scripts/browser_call.py`; distinguish verified draft filling from verified server creation.
+- For browser edits to existing products, including batch variant surcharges and all five English copy fields, read [browser-product-edit.md](references/browser-product-edit.md). Generate read/preview/apply/verify calls with `scripts/browser_call.py` and verify saved fields through the same product source.
 - Use `status`, `launch`, or `routes` for client diagnostics. On explicit request for a window check or activation, use `window-status` or `window-focus`. See [interfaces.md](references/interfaces.md).
 - Run `collected-transport-probe` for offline native encoding checks. My Products uses `product-live-get` / `product-live-edit` (`sale.detail/update`); Product Collection uses `collected-product-live-get` / `collected-product-live-edit` (`spider.detail/update`). Keep reads, writes and confirmation on the same source. The built-in TCP transport uses installed DLLs and the protected session from login, or `ZHIYING_SESSION_FILE`. Use `--include-copy` to read English copy and `--copy-file` to change selected fields. Verify writes by reading through that transport. See [collected-product-api.md](references/collected-product-api.md) for the outer `id` versus native `sale_id` distinction.
 - 保存后桌面显示可能延迟；以服务器读回结果为准，稍等并刷新页面，勿因界面暂未更新重复加价或追加文字。

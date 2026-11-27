@@ -43,3 +43,7 @@ The extension's localhost:1717 HTTP/WebSocket references are inside developer ho
 - 只有用户明确要求独立浏览器时，才可使用 MCP 启动的独立 Chrome、专用配置或 `--isolated` 临时浏览器。连接失败、没有调试端点或审批受阻时，说明具体阻碍，不自行切换到独立浏览器。
 - 简短说明实际使用的 Chrome 窗口。如需登录或额外验证，请用户直接在选定窗口内完成。
 - 连接后告知用户在浏览器任务完成前保持选定的 Chrome 窗口打开。助手复用同一连接和窗口；需要界面操作或可视核验时，提醒用户保持窗口显示、不要最小化。普通 API 读取无需持续将窗口置于前台。
+
+## 浏览器产品脚本（默认）
+
+链接或扩展 JSON 导入使用 [链接和 JSON 导入](aliexpress-import.md)；已有商品的五个英文文案字段和批量变体加价使用 [浏览器编辑](browser-product-edit.md)。默认通过 `scripts/browser_call.py` 生成完整调用文件，在现有普通 Chrome 连接中执行，保存后检查 `ok && verified`。旧表单方式仅作为确实需要操作页面控件时的备用路径，不作为手工拼接脚本的默认流程。
