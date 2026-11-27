@@ -48,7 +48,7 @@ python scripts/zhiying.py product-live-edit --product-id 951393413 --set-surchar
 
 当前安装版的五个原生字段已通过独立加载 User 程序集、求值 `GetTitle/GetBrief/GetKeys/GetBullet/GetIntro` 的字符串参数核实。CLI 直接读取并更新原字段，保留其他语言。兼容已有执行器返回的 `listing_copy` 映射。`sale_en` 保留报关英文简称用途。示例见 [修改标题与其他文案](erp-products.md#修改标题与其他文案)。
 
-内置执行器按 `scripts/native/client-profiles.json` 中的 Work/Core/User SHA256 匹配已核验符号。版本变化会返回 `unsupported_client_version`；按 [客户端更新现场修复](client-update.md) 检查并验证新配置。2026-11-26 16:28 版使用 `cBSF.ABSs`，历史版符号保留在各自配置内。
+内置执行器按 `scripts/native/client-profiles.json` 中的 Work/Core/User SHA256 匹配已核验符号。遇到版本拒绝时，运行 `client-diagnose --symbols` 并按 [客户端更新现场修复](client-update.md) 验证新配置。2026-11-27 12:55 版使用 `JgP5.ggPZ`，历史版符号保留在各自配置内。
 
 两个变体可以一起增加加价并追加英文介绍，真实键先从详情读取：
 

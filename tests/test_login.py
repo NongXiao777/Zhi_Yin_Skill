@@ -16,6 +16,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import collected_transport
+from client_version import DLL_KEYS, fingerprint
 import login
 import login_credentials
 import zhiying
@@ -164,18 +165,27 @@ class LoginTests(unittest.TestCase):
     def test_native_login_uses_window_host_without_loading_or_prompting_for_credentials(self):
         self.args.action = 'login-native'
         self.args.timeout = 30
-        native_reply = {'ok': True, 'authenticated': True, 'session_saved': True,
-                        'session_file': str(self.session_file), 'protection': login_credentials.PROTECTION,
-                        'login_mode': 'native_window', 'token': self.session['token']}
-        completed = subprocess.CompletedProcess(self.transport, 0, json.dumps(native_reply).encode(), b'')
+        hashes = {'work_sha256': '1' * 64, 'user_sha256': '2' * 64}
+
+        def host(command, **kwargs):
+            pending = Path(command[-2])
+            self.assertNotEqual(pending, self.session_file)
+            login.save_session(self.session, pending, hashes)
+            # A vendor shutdown may leave the completed file without a stdout reply.
+            return subprocess.CompletedProcess(command, 1, b'', self.secret['password'].encode())
+
         with patch.object(login, 'native_command', return_value=self.transport) as build, \
                 patch.object(login.credentials, 'prompt_credentials', side_effect=AssertionError('Window collects credentials')), \
                 patch.object(login.credentials, 'load_credentials', side_effect=AssertionError('Must not unlock saved password')), \
-                patch.object(login.subprocess, 'run', return_value=completed) as run:
+                patch.object(login.credentials, 'protect_bytes', return_value=b'synthetic-ciphertext'), \
+                patch.object(login.subprocess, 'run', side_effect=host) as run:
             result = login.login_result(self.args)
         build.assert_called_once_with(self.args.app, source_file='NativeLoginHost.cs')
-        self.assertEqual(run.call_args.args[0], [*self.transport, str(self.session_file), '30'])
+        self.assertEqual(run.call_args.args[0][:-2], self.transport)
+        self.assertEqual(run.call_args.args[0][-1], '30')
+        self.assertEqual(result['session_file'], str(self.session_file))
         self.assertEqual(result['login_mode'], 'native_window')
+        self.assertEqual(json.loads(self.session_file.read_text())['client_hashes'], hashes)
         self.assert_safe(result)
 
     def test_cancelled_native_login_preserves_existing_session_and_redacts_raw_output(self):
@@ -191,6 +201,27 @@ class LoginTests(unittest.TestCase):
         self.assertIn('cancelled', str(error.exception))
         self.assert_safe(str(error.exception))
         self.assertEqual(self.session_file.read_bytes(), b'old-protected-session')
+
+    def test_login_records_both_dlls_and_only_skips_the_popup_for_a_matching_session(self):
+        for dll in login.SESSION_DLLS:
+            (self.root / dll).write_bytes(dll.encode())
+        hashes = {DLL_KEYS[dll]: fingerprint(self.root / dll) for dll in login.SESSION_DLLS}
+        self.invoke({**self.response(), 'client_hashes': hashes})
+        envelope = json.loads(self.session_file.read_text(encoding='utf-8'))
+        self.assertEqual(envelope['client_hashes'], hashes)
+
+        self.args.action = 'login-native'
+        self.args.if_needed = True
+        with patch.object(login, 'native_command', side_effect=AssertionError('Must not open a matching session')):
+            self.assertFalse(login.login_result(self.args)['login_attempted'])
+        for dll in login.SESSION_DLLS:
+            with self.subTest(dll=dll):
+                (self.root / dll).write_bytes(b'updated')
+                status = login.login_status(self.session_file, self.args.app)
+                self.assertTrue(status['relogin_recommended'])
+                self.assertEqual(status['client_binding'], 'changed')
+                self.assertEqual(status['client_dlls'][dll], 'changed')
+                (self.root / dll).write_bytes(dll.encode())
 
     def test_noninteractive_cli_rejects_before_login_or_secret_output(self):
         output = io.StringIO()

@@ -62,7 +62,8 @@ internal static class NativeLoginHost
         {
             var protectedBytes = ProtectedData.Protect(plaintext, null, DataProtectionScope.CurrentUser);
             var envelope = new { version = 1, protection = "windows-dpapi-current-user",
-                                 purpose = "zhiying-login-session", data = Convert.ToBase64String(protectedBytes) };
+                purpose = "zhiying-login-session", data = Convert.ToBase64String(protectedBytes),
+                client_hashes = new { work_sha256 = Symbol("work_sha256"), user_sha256 = Symbol("user_sha256") } };
             Directory.CreateDirectory(Path.GetDirectoryName(file));
             temporary = file + "." + Guid.NewGuid() + ".tmp";
             File.WriteAllText(temporary, JsonSerializer.Serialize(envelope));

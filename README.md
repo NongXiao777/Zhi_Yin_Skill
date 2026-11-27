@@ -7,11 +7,13 @@
 | 命令 | 操作 |
 |---|---|
 | `credentials-save` / `credentials-status` | 在终端录入隐藏密码并加密保存，或只检查保存状态 |
-| `login-native` / `login` / `login-probe` / `login-status` | 呼出厂商登录窗口，或终端账号密码登录；离线编码检查、检查会话文件 |
+| `login-native [--if-needed]` / `login` / `login-probe` / `login-status` | 厂商弹窗登录、终端登录、离线编码探针和会话 DLL 哈希检查 |
 | `pricing-quote` | 按明确进货、运费、包材、其他成本、费率和利润目标计算 .49/.89/.99 渠道报价 |
 | `status` / `launch` / `routes` | 检查或启动智赢，查看扩展中的命令定义 |
+| `client-diagnose [--symbols]` | 只读比较 Core、Work、User DLL 的 SHA256，可扫描 Work DLL 查找 TCP 类型和方法候选 |
 | `window-status` / `window-focus` | 按明确请求检查现有窗口或切到前台 |
 | `collected-transport-probe` | 无窗口加载原生 TCP 组件并验证请求编码 |
+| `collected-cache-list` / `collected-cache-get` | 离线查找和读取智赢内嵌浏览器已缓存的速卖通商品 |
 | `product-live-get` / `product-live-edit` | 通过 `sale.detail/update` 读取或保存“我的产品”，并读回核验 |
 | `product-plan` / `product-plan-show` / `product-apply` / `product-restore` | 保存实际改动计划、提交前持久化意图、防并发重放、按目标还原并保留无关编辑 |
 | `collected-product-live-get` / `collected-product-live-edit` | 通过 `spider.detail/update` 读取或保存“产品采集”，并读回核验 |
@@ -29,10 +31,11 @@
 
 从采集到包装、定价、文案与图片回填，按 [操作流程](references/operation-workflow.md) 检查当前入口和未核验的接口。原定价表未知时，可用 [明确成本报价](references/pricing.md) 与合成 JSON 示例建立计算输入。
 
-呼出厂商原生登录窗口可运行 `python scripts/zhiying.py login-native`，用户在窗口内输入密码，成功后宿主保护会话并关闭。终端输入可用 `credentials-save` 后 `login --saved`，或 `login --remember`。业务命令自动读取本地加密会话；原生窗口登录和“我的产品”只读查询已验证。参见 [命令行登录](references/login.md)。
+运行 `python scripts/zhiying.py login-native` 可打开厂商原生登录窗口。登录成功后保存加密会话和当时的 Work、User DLL 哈希。加上 `--if-needed` 可在两份 DLL 都匹配时跳过弹窗。终端登录方式和会话复用见 [命令行登录](references/login.md)。
 
 ```powershell
 python scripts/zhiying.py status
+python scripts/zhiying.py client-diagnose --symbols
 python scripts/zhiying.py routes --match amazon --limit 5
 python scripts/zhiying.py erp-product-get --file examples/erp-products.csv --product-id DEMO-1001
 python scripts/zhiying.py erp-draft-preview --file examples/erp-products.csv --product-id DEMO-1001 --add-amount 3.25 --currency CNY
@@ -54,7 +57,7 @@ Sales and Traffic 覆盖整体页面流量。净利润和止损需要另有成�
 
 ## 在 Codex 复用
 
-将 `zhiying-cli` 文件夹放在 Codex 的技能搜索目录，或在对话里指定 [SKILL.md](SKILL.md)。入口只列常用命令。接口和业务资料按需读取。
+将此 skill 放在 Codex 用户技能目录 `~/.agents/skills/zhiying-cli`，保留 `SKILL.md`、`scripts/`、`references/` 和 `examples/` 的相对位置，即可在新会话用 `$zhiying-cli` 调用。也可以在对话里直接指定本仓库的 [SKILL.md](SKILL.md)。接口和业务资料按需读取。
 
 ## 验证
 

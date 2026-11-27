@@ -2,15 +2,29 @@
 
 遇到 `unsupported_client_version`，或更新后出现反射相关的 `native_transport_failed`，在当前任务中检查实际安装 DLL，修复本地 Skill 副本后继续已授权工作。用户不必每次重新授权这种本地修复。未知写入结果仍须先读取现状，不能重跑增量改价或追加文字。
 
-## 先读取证据
+## 记录更新前基线和对比更新后 DLL
+
+```powershell
+python scripts/zhiying.py --app "$env:LOCALAPPDATA\Programs\ZYing\ZYing.exe" client-diagnose --symbols
+```
+
+`client-diagnose` 只读取当前安装目录的 Core、Work、User DLL 和仓库里的 `scripts/native/client-profiles.json`。`dlls` 逐项显示 `matched`、`changed`、`missing` 或 `unreadable`，`sha256` 和 `baseline_sha256` 提供实测及基线哈希。可以把 JSON 输出保存在任务工作目录作为更新前记录。已记录的 TCP 类型依次为 `ze53.Fe5b`、`cBSF.ABSs`、`JgP5.ggPZ`，每个配置都保存了三份 DLL 的哈希。
+
+默认显示完整匹配的旧版或新版配置。没有完整匹配时，与匹配 DLL 最多的配置比较，同分选清单中较新的条目。用 `--baseline 2026-11-27-1255` 固定对照版本。`ok` 表示诊断完成，`supported` 表示三个 DLL 完整命中同一个配置。DLL 哈希变化只说明文件内容变化。Work 已匹配时，可直接沿用该 Work 哈希对应的类型名称作为核验线索。User 已变化时，优先检查桌面登录调用链。
+
+## 定位新的混淆类型
+
+`--symbols` 用 PowerShell 7 扫描 Work DLL 的 PE 元数据。它用 TCP 客户端字段以及返回 `Task<ZYing.ZResult>` 的两个发送签名 `(string, int)`、`(ZYing.Data.Record[])` 定位 `rpc_type`，并列出发送方法、嵌套服务器类型和端点方法。以 `rpc_inspection.candidates` 缩小范围。若有多个候选或没有候选，回到下面的调用链核对。若报告扫描期间 Work DLL 改变，等更新完成后重新诊断。
 
 `scripts/native/Inspect.ps1` 只读取 DLL 的元数据和 IL，不读取配置、进程内存、凭据，也不联网。用 PowerShell 7 运行，输出存入任务的临时目录：
 
 ```powershell
-pwsh -NoProfile -File scripts/native/Inspect.ps1 -AppDirectory "$env:LOCALAPPDATA\Programs\ZYing" > work/client-metadata.txt
+$appDir = "$env:LOCALAPPDATA\Programs\ZYing"
+pwsh -NoProfile -File scripts/native/Inspect.ps1 -AppDirectory $appDir -TypeMatch 'MLogin.*登录' -MethodMatch '^MoveNext$' -IncludeIL
+pwsh -NoProfile -File scripts/native/Inspect.ps1 -AppDirectory $appDir -TypeMatch '^JgP5\.ggPZ(?:\+DcoB)?$'
 ```
 
-默认只输出登录、响应和候选 TCP 类型的字段与签名。用 `-TypeMatch '类型正则' -MethodMatch '方法正则' -IncludeIL` 读取目标 IL；避免把全部 DLL 的 IL 装入上下文。先核对实际 `--app` 安装路径；不同目录可能同时留有多个版本。
+把第二条命令中的类型替换成诊断输出的候选全名，使用正则时转义句点和加号。加上 `-MethodMatch '方法正则' -IncludeIL` 可继续核对指定方法。沿登录状态机中对候选类的字段访问和调用处确认默认服务器、命令字段等符号。11 月 27 日版在 `ZYing.MLogin+<登录>d__14.MoveNext` 中写入 `JgP5.ggPZ::mgdo`，在 `QgYn` 构建请求帧时读取命令字段 `ggIi`。
 
 ## 维护版本配置
 
@@ -31,7 +45,7 @@ $env:ZHIYING_NATIVE_TEST_APP="$env:LOCALAPPDATA\Programs\ZYing\ZYing.exe"
 python -m unittest discover -s tests -p test_native_transport.py
 ```
 
-探针必须返回 `network_requests_sent: 0`。原生测试使用合成凭据和回环服务器，应覆盖真实编码、响应等待、登录会话提取、拒绝/额外验证、DPAPI 互通和商品读取。调整相关业务代码后运行对应测试。只有当前版本验证通过才使用真实保存凭据尝试一次登录，读取商品，再执行已授权修改并读回。
+探针必须返回 `network_requests_sent: 0`。原生测试使用合成凭据和回环服务器，应覆盖真实编码、响应等待、登录会话提取、拒绝/额外验证、DPAPI 互通和商品读取。调整相关业务代码后运行对应测试。当前版本通过验证后，若它的 Work 或 User 哈希与上次登录不同，用 `login-native --if-needed` 重新登录，先读取商品，再执行已授权修改并读回。
 
 保存前保留完整语言和变体集合，检查要改字段的 `expected` 基线。读回匹配提交字段后才能报告成功；审核状态、同步等其他服务端变化需额外读取检查。若保存结果不明，先读商品，不自动重试。若登录被拒绝，区分已保存输入、桌面分支、额外验证和服务器要求；不要把版本更新自动当作所有失败的原因。
 

@@ -344,6 +344,7 @@ def main():
     import erp_products
     import listing_copy
     import sp_api
+    from collected_transport import ClientReloginRequired
     from login import LOGIN_COMMANDS, add_login_commands, login_result
 
     if hasattr(sys.stdout, 'reconfigure'):
@@ -355,8 +356,16 @@ def main():
     commands = parser.add_subparsers(dest='action', required=True)
     add_login_commands(commands)
     commands.add_parser('status', help='inspect local ZYing installation and processes')
+    diagnosis = commands.add_parser('client-diagnose', help='compare local client DLL hashes against verified profiles')
+    diagnosis.add_argument('--baseline', help='compare against a specific verified profile name')
+    diagnosis.add_argument('--symbols', action='store_true', help='scan Work.dll metadata for possible TCP symbols (PowerShell 7)')
     commands.add_parser('launch', help='start the installed ZYing client')
     commands.add_parser('collected-transport-probe', help='load native TCP components and encode an offline request')
+    cache_list = commands.add_parser('collected-cache-list', help='list AliExpress products in the embedded browser cache')
+    cache_list.add_argument('--match', action='append', default=[], help='case-insensitive title substring; repeat for alternatives')
+    add_limit(cache_list)
+    cache_get = commands.add_parser('collected-cache-get', help='read a cached AliExpress product by its source ID')
+    cache_get.add_argument('--source-id', required=True, help='AliExpress item ID from the product URL')
     commands.add_parser('window-status')
     focus = commands.add_parser('window-focus')
     focus.add_argument('--window', type=int, help='Handle returned by window-status')
@@ -383,6 +392,9 @@ def main():
             result = login_result(args)
         elif args.action == 'status':
             result = status(args.app, args.extension)
+        elif args.action == 'client-diagnose':
+            from client_version import diagnose_client
+            result = diagnose_client(args.app, args.baseline, args.symbols)
         elif args.action == 'launch':
             result = launch(args.app, args.extension)
         elif args.action == 'routes':
@@ -393,6 +405,12 @@ def main():
         elif args.action == 'collected-transport-probe':
             from collected_transport import native_probe
             result = native_probe(args.app)
+        elif args.action in ('collected-cache-list', 'collected-cache-get'):
+            from collected_cache import cached_products
+            if args.action == 'collected-cache-list':
+                result = cached_products(args.app, terms=args.match, limit=args.limit)
+            else:
+                result = cached_products(args.app, source_id=args.source_id)
         elif args.action in PLAN_COMMANDS:
             from product_plans import create_plan, inspect_plan, apply_plan, restore_plan
             from collected_transport import transport_command
@@ -427,6 +445,9 @@ def main():
         emit(result)
         return int(result.get('ok') is False or (
             args.action == 'listing-copy-check' and not result['copy_checks_pass']))
+    except ClientReloginRequired as error:
+        emit({'ok': False, 'error': 'client_relogin_required', 'message': str(error)})
+        return 1
     except (erp_products.ProductError, listing_copy.ListingCopyError) as error:
         emit({'ok': False, 'error': str(error)})
         return 1
@@ -442,6 +463,8 @@ def main():
             TypeError, AttributeError):
         if args.action in LOGIN_COMMANDS:
             message = 'Could not complete the login command. Check the client installation and local protected files.'
+        elif args.action == 'client-diagnose':
+            message = 'Could not read the client profile manifest. Check scripts/native/client-profiles.json.'
         elif args.action in ('status', 'launch', 'routes', 'collected-transport-probe', *WINDOW_COMMANDS):
             message = 'Probe failed. Verify the installation, package path and Windows process access.'
         elif args.action in ('traffic-summary', 'pricing-quote', 'listing-preview', 'erp-product-get', 'erp-draft-preview',

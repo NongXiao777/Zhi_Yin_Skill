@@ -76,11 +76,15 @@ internal sealed class NativeTransport
     private IPEndPoint lastEndpoint;
     private static string appDirectory;
 
-    private NativeTransport(string directory, string profileFile, JsonObject session, bool login = false)
+    private NativeTransport(string directory, string profileFile, JsonObject session, bool login, JsonObject sessionHashes)
     {
         appDirectory = directory;
         string assemblyPath = Path.Combine(directory, "ZYing.Work.dll");
         profile = SelectProfile(directory, profileFile);
+        if (sessionHashes != null &&
+            (sessionHashes["work_sha256"]?.GetValue<string>() != Symbol("work_sha256") ||
+             sessionHashes["user_sha256"]?.GetValue<string>() != Symbol("user_sha256")))
+            throw new InvalidOperationException("client_relogin_required");
         AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;
         var work = Assembly.LoadFrom(assemblyPath);
         coreAssembly = Assembly.LoadFrom(Path.Combine(directory, "ZYing.Core.dll"));
@@ -257,7 +261,12 @@ internal sealed class NativeTransport
         var rows = Array.CreateInstance(recordType, 1);
         rows.SetValue(LoginRecord(input["phone"].GetValue<string>(), input["password"].GetValue<string>()), 0);
         var result = await Send("common.login", rows);
-        return new JsonObject { ["ok"] = true, ["authenticated"] = true, ["session"] = LoginSession(result) };
+        return new JsonObject {
+            ["ok"] = true, ["authenticated"] = true, ["session"] = LoginSession(result),
+            ["client_hashes"] = new JsonObject {
+                ["work_sha256"] = Symbol("work_sha256"), ["user_sha256"] = Symbol("user_sha256")
+            }
+        };
     }
 
     private JsonObject LoginProbe()
@@ -289,8 +298,9 @@ internal sealed class NativeTransport
         finally { rpcType.GetMethod(Symbol("close_method"), Type.EmptyTypes).Invoke(rpc, null); }
     }
 
-    private static JsonObject LoadSession()
+    private static JsonObject LoadSession(out JsonObject clientHashes)
     {
+        clientHashes = null;
         string file = Environment.GetEnvironmentVariable("ZHIYING_SESSION_FILE");
         bool explicitFile = !string.IsNullOrEmpty(file);
         if (!explicitFile)
@@ -307,6 +317,8 @@ internal sealed class NativeTransport
             envelope?["protection"]?.GetValue<string>() != "windows-dpapi-current-user" ||
             envelope?["purpose"]?.GetValue<string>() != "zhiying-login-session")
             throw new InvalidOperationException("invalid_session_configuration");
+        if (envelope.TryGetPropertyValue("client_hashes", out var binding))
+            clientHashes = binding as JsonObject ?? throw new InvalidOperationException("invalid_session_configuration");
         byte[] plaintext = null;
         try
         {
@@ -393,7 +405,7 @@ internal sealed class NativeTransport
         while (exception.InnerException != null)
             exception = exception.InnerException;
         string[] publicErrors = {
-            "unsupported_client_version", "invalid_session_configuration", "tcp_timeout",
+            "unsupported_client_version", "client_relogin_required", "invalid_session_configuration", "tcp_timeout",
             "server_rejected_request", "missing_detail_record", "unexpected_detail_shape", "product_not_found",
             "wrong_product", "invalid_update_fields", "native_fields_require_json_strings",
             "unsupported_command", "missing_session_file", "request_too_large"
@@ -423,6 +435,7 @@ internal sealed class NativeTransport
             if (login && (!Console.IsInputRedirected || !Console.IsOutputRedirected))
                 throw new InvalidOperationException("private_login_pipe_required");
             JsonObject session;
+            JsonObject sessionHashes = null;
             if (probe || loginProbe)
             {
                 session = new JsonObject {
@@ -439,8 +452,8 @@ internal sealed class NativeTransport
                 session = hasAddress ? input : null;
             }
             else
-                session = LoadSession();
-            var transport = new NativeTransport(args[0], args[1], session, login || loginProbe);
+                session = LoadSession(out sessionHashes);
+            var transport = new NativeTransport(args[0], args[1], session, login || loginProbe, sessionHashes);
             JsonObject response;
             if (probe)
                 response = transport.Probe();

@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import product_plans as plans
 from collected_products import collection, encode_json
 from erp_products import ProductError
-from collected_transport import TransportConflict
+from collected_transport import ClientReloginRequired, TransportConflict
 
 
 class ProductPlanTests(unittest.TestCase):
@@ -251,13 +251,15 @@ class ProductPlanTests(unittest.TestCase):
         self.assertTrue(plans.restore_plan(['synthetic'], self.path)['remote_read_back_verified'])
         self.assertEqual(len(self.writes), 2)
 
-    def test_transport_conflict_keeps_plan_prepared_without_a_write(self):
+    def test_transport_rejection_before_a_write_keeps_plan_prepared(self):
         self.make_plan()
-        with patch.object(plans, 'request', side_effect=TransportConflict('Synthetic conflict')):
-            with self.assertRaises(TransportConflict):
-                plans.apply_plan(['synthetic'], self.path)
-        self.assertEqual(plans.inspect_plan(self.path)['state'], 'prepared')
-        self.assertFalse(self.writes)
+        for error in (TransportConflict, ClientReloginRequired):
+            with self.subTest(error=error):
+                with patch.object(plans, 'request', side_effect=error('Rejected before remote write')):
+                    with self.assertRaises(error):
+                        plans.apply_plan(['synthetic'], self.path)
+                self.assertEqual(plans.inspect_plan(self.path)['state'], 'prepared')
+                self.assertFalse(self.writes)
 
     def test_semantically_equivalent_json_does_not_fail_baseline_check(self):
         self.make_plan()

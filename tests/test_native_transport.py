@@ -16,6 +16,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
+from client_version import DLL_KEYS, diagnose_client, fingerprint
 from collected_transport import native_command
 from login import save_session
 
@@ -149,6 +150,19 @@ class NativeTransportTests(unittest.TestCase):
         self.assertNotIn('synthetic-login', result.stdout)
         self.assertNotIn('session', data)
 
+    def test_metadata_diagnosis_locates_the_profile_rpc_without_loading_the_client(self):
+        report = diagnose_client(Path(os.environ['ZHIYING_NATIVE_TEST_APP']), symbols=True)
+        self.assertTrue(report['supported'])
+        manifest = json.loads((ROOT / 'scripts' / 'native' / 'client-profiles.json').read_text(encoding='utf-8'))
+        profile = next(profile for profile in manifest if profile['name'] == report['matched_profile'])
+        inspection = report['rpc_inspection']
+        self.assertEqual(inspection['status'], 'found')
+        rpc, = inspection['candidates']
+        self.assertEqual(rpc['rpc_type'], profile['rpc_type'])
+        self.assertIn(profile['send_id_method'], rpc['send_id_methods'])
+        self.assertIn(profile['send_records_method'], rpc['send_records_methods'])
+        self.assertIn({'type': profile['server_type'], 'endpoint_methods': [profile['endpoint_method']]}, rpc['server_types'])
+
     def test_unrecognized_client_hash_stops_before_using_profile_symbols(self):
         with TemporaryDirectory() as directory:
             profiles = json.loads(Path(self.command[3]).read_text(encoding='utf-8'))
@@ -262,7 +276,12 @@ class NativeTransportTests(unittest.TestCase):
         self.assertNotIn(password.encode('utf-8'), observed['request'])
         self.assertEqual(observed['request'][24:40], bytes(16))
         self.assertNotIn('unrelated-synthetic-secret', result.stdout)
-        self.assertEqual(set(data), {'ok', 'authenticated', 'session'})
+        expected_hashes = {
+            DLL_KEYS[dll]: fingerprint(Path(self.command[2]) / dll)
+            for dll in ('ZYing.Work.dll', 'ZYing.User.dll')
+        }
+        self.assertEqual(data['client_hashes'], expected_hashes)
+        self.assertEqual(set(data), {'ok', 'authenticated', 'session', 'client_hashes'})
 
     def test_login_does_not_claim_success_without_a_member_token(self):
         result, _, _ = self.exchange(
@@ -317,6 +336,29 @@ class NativeTransportTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(json.loads(result.stdout)['record']['sale_id'], 1001)
         self.assertEqual(observed['request'][24:40], uuid.UUID(token).bytes_le)
+
+    def test_changed_session_dll_is_rejected_before_connecting(self):
+        hashes = {DLL_KEYS[dll]: fingerprint(Path(self.command[2]) / dll)
+                  for dll in ('ZYing.Work.dll', 'ZYing.User.dll')}
+        with TemporaryDirectory() as directory, socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            listener.listen(1)
+            listener.settimeout(0.1)
+            session_file = Path(directory) / 'session.dpapi'
+            address, port = listener.getsockname()
+            session = {'server_address': address, 'server_port': port, 'token': str(uuid.uuid4())}
+            for key in hashes:
+                with self.subTest(key=key):
+                    save_session(session, session_file, {**hashes, key: '0' * 64})
+                    env = {**os.environ, 'ZHIYING_SESSION_FILE': str(session_file)}
+                    result = subprocess.run(
+                        self.command, input='{"command":"sale.detail","id":1001}',
+                        env=env, capture_output=True, encoding='utf-8', timeout=15,
+                    )
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(json.loads(result.stdout), {'ok': False, 'error': 'client_relogin_required'})
+                    with self.assertRaises(socket.timeout):
+                        listener.accept()
 
     def test_native_encoder_can_run_without_session_or_window(self):
         env = os.environ.copy()

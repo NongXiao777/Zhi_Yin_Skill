@@ -19,6 +19,10 @@ class TransportConflict(ProductError):
     pass
 
 
+class ClientReloginRequired(ProductError):
+    pass
+
+
 def native_command(app, source_file='NativeTransport.cs'):
     shell = shutil.which('pwsh')
     if shell is None:
@@ -69,9 +73,12 @@ def request(transport, payload):
     if not isinstance(response, dict) or response.get('ok') is not True:
         if isinstance(response, dict) and response.get('error') == 'conflict':
             raise TransportConflict('Transport reported an update conflict. Read the current product before retrying.')
+        if isinstance(response, dict) and response.get('error') == 'client_relogin_required':
+            raise ClientReloginRequired('The Work or User DLL changed since login. Run login-native using the same --app path.')
         native_errors = {
             'missing_session_file': 'The native transport needs a local session file in ZHIYING_SESSION_FILE',
-            'unsupported_client_version': 'The installed client differs from the verified native transport version',
+            'unsupported_client_version': 'The installed client needs a verified native transport profile. '
+                                          'Run client-diagnose --symbols using the same --app path.',
             'product_not_found': 'The authenticated detail response contained no product. Verify the internal collected-product ID',
             'invalid_session_configuration': 'The local session needs the actual server address, port and login token',
             'server_rejected_request': 'The server rejected the native request. Verify the login session and account permissions',
@@ -147,7 +154,7 @@ def live_result(args, *, edit=False):
             'command': source + '.update', 'id': product_id, 'fields': changed,
             'expected': {field: before[field] for field in changed},
         })
-    except TransportConflict:
+    except (TransportConflict, ClientReloginRequired):
         raise
     except ProductError as error:
         message = str(error).rstrip('.')

@@ -12,7 +12,7 @@ import tempfile
 
 from collected_products import (EXTRA_COPY_FIELDS, collection, decode_json, encode_json, existing_surcharge,
                                 product_number, record_result, set_collection, variant_key)
-from collected_transport import EDIT_FIELDS, TransportConflict, detail, request
+from collected_transport import EDIT_FIELDS, ClientReloginRequired, TransportConflict, detail, request
 from erp_products import FILE_LIMIT, ProductError, decimal_text
 
 
@@ -301,11 +301,17 @@ def _send_and_verify(transport, path, document, current, wanted, *, restoring=Fa
         document['state'] = 'restored' if restoring else 'applied'
         _write_document(path, document)
         return {**_summary(document), 'update_sent': False, 'remote_read_back_verified': True}
+    previous_state = document['state']
     document['state'] = 'restore_attempted' if restoring else 'write_attempted'
     _write_document(path, document)
     try:
         request(transport, {'command': document['namespace'] + '.update', 'id': document['product_id'],
                             'fields': fields, 'expected': {field: current.get(field) for field in fields}})
+    except ClientReloginRequired:
+        # The transport rejected the session before making any business request.
+        document['state'] = previous_state
+        _write_document(path, document)
+        raise
     except TransportConflict:
         # The transport confirms no update was sent for a baseline conflict.
         document['state'] = 'verification_failed' if restoring else 'prepared'

@@ -4,12 +4,15 @@
 Read installed client DLL metadata without loading or executing the assemblies.
 .EXAMPLE
 pwsh -File scripts/native/Inspect.ps1 -AppDirectory "$env:LOCALAPPDATA\Programs\ZYing" -TypeMatch 'ABSs|HuxA|ZResult' -MethodMatch 'LBgK|bBge|iBgU|IqkW'
+.EXAMPLE
+pwsh -File scripts/native/Inspect.ps1 -AppDirectory "$env:LOCALAPPDATA\Programs\ZYing" -RpcCandidates
 #>
 param(
     [Parameter(Mandatory=$true)][string]$AppDirectory,
     [string]$TypeMatch = '',
     [string]$MethodMatch = '.*',
-    [switch]$IncludeIL
+    [switch]$IncludeIL,
+    [switch]$RpcCandidates
 )
 $ErrorActionPreference = 'Stop'
 # Only file metadata and PE bytes are read. Assembly.Load/LoadFrom is deliberately
@@ -116,6 +119,97 @@ function Get-MethodSignature($method) {
     return "$($script:reader.GetString($method.Name))$generic ($($parameters -join ', ')) => $returnType"
 }
 
+function Get-FieldType($field) {
+    $bytes = $script:reader.GetBlobBytes($field.Signature)
+    $index = 1
+    return Read-SigType $bytes ([ref]$index)
+}
+
+function Find-RpcCandidates {
+    $resultType = 'System.Threading.Tasks.Task`1<ZYing.ZResult>'
+    $recordSignature = '(ZYing.Data.Record[]) => ' + $resultType
+    $idSignature = '(string, int) => ' + $resultType
+    foreach ($handle in $script:reader.TypeDefinitions) {
+        $type = $script:reader.GetTypeDefinition($handle)
+        # Start with the socket field, then check both public instance send signatures.
+        $hasTcpClient = $false
+        foreach ($fieldHandle in $type.GetFields()) {
+            $field = $script:reader.GetFieldDefinition($fieldHandle)
+            if ((Get-FieldType $field) -ceq 'System.Net.Sockets.TcpClient') {
+                $hasTcpClient = $true
+                break
+            }
+        }
+        if (-not $hasTcpClient) { continue }
+
+        $recordMethods = @()
+        $idMethods = @()
+        foreach ($methodHandle in $type.GetMethods()) {
+            $method = $script:reader.GetMethodDefinition($methodHandle)
+            if (($method.Attributes -band [Reflection.MethodAttributes]::MemberAccessMask) -ne
+                    [Reflection.MethodAttributes]::Public -or
+                    ($method.Attributes -band [Reflection.MethodAttributes]::Static)) { continue }
+            $signature = Get-MethodSignature $method
+            $name = $script:reader.GetString($method.Name)
+            if ($signature -ceq "$name $recordSignature") { $recordMethods += $name }
+            if ($signature -ceq "$name $idSignature") { $idMethods += $name }
+        }
+        if (-not $recordMethods.Count -or -not $idMethods.Count) { continue }
+
+        $serverTypes = @(foreach ($nestedHandle in $type.GetNestedTypes()) {
+            $nested = $script:reader.GetTypeDefinition($nestedHandle)
+            $constructible = $false
+            $endpointMethods = @(foreach ($methodHandle in $nested.GetMethods()) {
+                $method = $script:reader.GetMethodDefinition($methodHandle)
+                if (($method.Attributes -band [Reflection.MethodAttributes]::MemberAccessMask) -ne
+                        [Reflection.MethodAttributes]::Public -or
+                        ($method.Attributes -band [Reflection.MethodAttributes]::Static)) { continue }
+                $name = $script:reader.GetString($method.Name)
+                $signature = Get-MethodSignature $method
+                if ($signature -ceq '.ctor (System.Net.IPEndPoint) => void') { $constructible = $true }
+                if ($signature -ceq "$name () => System.Net.IPEndPoint") { $name }
+            })
+            if ($constructible -and $endpointMethods.Count) {
+                [ordered]@{type = Get-DefinitionName $nestedHandle; endpoint_methods = $endpointMethods}
+            }
+        })
+        [ordered]@{
+            rpc_type = Get-DefinitionName $handle
+            send_id_methods = $idMethods
+            send_records_methods = $recordMethods
+            server_types = $serverTypes
+        }
+    }
+}
+
+if ($RpcCandidates) {
+    $stream = [IO.File]::OpenRead((Join-Path $directory.FullName 'ZYing.Work.dll'))
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $script:pe = $null
+    try {
+        $hash = [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '')
+        $stream.Position = 0
+        $script:pe = [System.Reflection.PortableExecutable.PEReader]::new($stream)
+        $candidates = @()
+        $status = 'not_managed'
+        if ($script:pe.HasMetadata) {
+            $script:reader = [System.Reflection.Metadata.PEReaderExtensions]::GetMetadataReader($script:pe)
+            $candidates = @(Find-RpcCandidates)
+            $status = switch ($candidates.Count) {
+                0 { 'not_found' }
+                1 { 'found' }
+                default { 'ambiguous' }
+            }
+        }
+        [ordered]@{status = $status; work_sha256 = $hash; candidates = $candidates} | ConvertTo-Json -Depth 6 -Compress
+    } finally {
+        if ($script:pe) { $script:pe.Dispose() }
+        $sha.Dispose()
+        $stream.Dispose()
+    }
+    return
+}
+
 foreach ($file in $files) {
     $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
     "ASSEMBLY $($file.Name) SHA256=$hash BYTES=$($file.Length)"
@@ -145,9 +239,7 @@ foreach ($file in $files) {
             "TYPE $typeName"
             foreach ($fieldHandle in $type.GetFields()) {
                 $field = $script:reader.GetFieldDefinition($fieldHandle)
-                $bytes = $script:reader.GetBlobBytes($field.Signature)
-                $index = 1
-                "FIELD $($script:reader.GetString($field.Name)) $(Read-SigType $bytes ([ref]$index)) [$($field.Attributes)]"
+                "FIELD $($script:reader.GetString($field.Name)) $(Get-FieldType $field) [$($field.Attributes)]"
             }
             foreach ($methodHandle in $type.GetMethods()) {
                 $method = $script:reader.GetMethodDefinition($methodHandle)

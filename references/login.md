@@ -1,23 +1,23 @@
 # 智赢命令行登录
 
-核验日期：2026-11-26。登录使用桌面客户端的 `common.login` TCP 协议，无需操作登录窗口。已验证本机组件加载、密码编码、合成回环登录响应及 Python→.NET 加密会话互通，并支持当天 16:28 更新后的客户端。真实账户和商品操作需在当前任务验证；具体账户的失败记录属于任务报告。
+Python CLI 根据 Work、Core 和 User DLL 的 SHA256 选择已核验的客户端配置，再调用本机的 .NET 原生实现。2026-11-27 12:55 版 TCP 类为 `JgP5.ggPZ`。支持厂商弹窗和终端登录。
 
-## 用户在终端输入
-
-也可使用厂商原生登录窗口：
+## 厂商原生登录窗口
 
 ```powershell
 python scripts/zhiying.py login-native
 python scripts/zhiying.py product-live-get --product-id 951393413 --limit 2
 ```
 
-`login-native` 在独立 STA .NET 6 Desktop 宿主中创建 `ZYing.MLogin.Instance`，用户直接在原生窗口输入账号/密码。成功后同一宿主读取 `Member.Token/UserID`、实际 `HBQ2` endpoint、设备 Guid 和交换状态，并立即保存 DPAPI 会话；随后关闭宿主窗口。厂商成功路径可能短暂创建主窗口，这个闪现不代表登录失败。CLI 返回 `authenticated: true` 和 `session_saved: true` 后，用只读商品命令验证会话。
+`login-native` 在独立 STA .NET 6 Desktop 宿主中创建 `ZYing.MLogin.Instance`，用户直接在原生窗口输入账号和密码。成功后宿主保存 DPAPI 会话和当前 Work、User 哈希，CLI 返回 `authenticated: true` 和 `session_saved: true`。用只读商品命令验证会话。
 
 宿主使用自己的临时应用目录；原生记住的手机号可能需要首次输入。它不解密已有 CLI 密码，也不从另一桌面进程扫描内存；用户名记住和缓存清理沿用原生窗口的正常行为。用户取消或超时不会替换旧会话。厂商 `Global.ShowLogin()` 会调用更新检查，因此宿主直接创建 `MLogin` 并设置 `Global.Context`。
 
 2026-11-26 已验证原生窗口显示、真实登录成功、DPAPI 会话交接，以及独立 CLI 的 `sale.detail` 读取。“我的产品”使用 `product-live-get`（`sale.detail`）；“产品采集”使用 `collected-product-live-get`（`spider.detail`）。两个来源不能混用，同一编号在另一来源可能没有记录。
 
-只录入并保存，暂不联网：
+## 终端输入
+
+只录入并保存时使用：
 
 ```powershell
 python scripts/zhiying.py credentials-save
@@ -49,7 +49,7 @@ python scripts/zhiying.py login-status
 python scripts/zhiying.py collected-product-live-get --product-id 954521907 --include-copy
 ```
 
-`credentials-status` 不解密；`login-status` 只报告文件是否存在，不能说明会话仍有效。登录失败或响应缺失时保留旧会话；`login --remember` 在登录成功后才保存凭据。若会话过期，重新 `login --saved`，再执行业务读取。登录验证不需要修改商品。
+`login-status` 离线检查会话文件和两份 DLL 的哈希，不解密会话，也不验证会话是否已过期。任一哈希不同，原生业务命令会在发送请求前返回 `client_relogin_required`。先确认新版配置已核验，再运行 `login-native --if-needed`。会话存有两份匹配的哈希时该选项跳过弹窗。旧会话会显示 `untracked`，仍兼容读取，并建议通过弹窗登录一次来建立基线。会话过期时直接运行 `login-native`。取消或失败会保留原会话，`login --remember` 在登录成功后才保存凭据。
 
 加密避免明文出现在普通文件、进程参数和日志中。同一 Windows 用户有权限调用 DPAPI 解密，因此它不能隔离同身份运行的助手。脚本只在用户明确请求的登录动作中解密，不提供查看明文命令。
 
